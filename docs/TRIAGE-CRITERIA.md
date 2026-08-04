@@ -425,7 +425,7 @@ Evidence: `synthetic/RESULTS-aks-s4.md` §1.
 they said they measured, at 0% writes. It means no number from them may be quoted
 without its write ratio attached.
 
-**QUALIFIED 2026-08-04 by the multi-tenant campaign, one day later.** The
+**QUALIFIED by the multi-tenant campaign, 2026-08-04, the same day.** The
 threshold above is not "10% of transactions". It is **what share of the time
 budget the writes consume**, and the two only coincide when reads are cheap.
 
