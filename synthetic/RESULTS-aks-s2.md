@@ -88,7 +88,7 @@ protocol produced it.
 | 10 | 11 | 98.9% | 339 µs | 23,625 | 396 µs | 20,234 | −14% |
 | 100 | 101 | 99.1% | 355 µs | 22,548 | 396 µs | 20,221 | −10% |
 | 1,000 | 1,001 | 99.1% | 549 µs | 14,566 | 393 µs | 20,340 | **+40%** |
-| 10,000 | 10,001 | **16.4%** | 2,396 µs | 3,338 | **609,315 µs** | **13** | **−100%** |
+| 10,000 | 10,001 | **14.9%** | 2,423 µs | 3,302 | **714,506 µs** | **12** | **−100%** |
 
 Non-monotonic, and the shape is the finding.
 
@@ -99,9 +99,10 @@ sign flips back to positive at span=1,000: the origin has become expensive enoug
 to clear PgCache's fixed cost, exactly the mechanism C9 describes.
 
 **Then, at span=10,000, it does not get slowly worse. It falls off a cliff.** The
-hit ratio collapses from 99.1% to 16.4% — PgCache largely stops *admitting* these
-entries, so almost every query pays the miss path, and at 609 ms per transaction
-the path is 254× worse than the uncached origin.
+hit ratio collapses from 99.1% to 14.9% — PgCache largely stops *admitting* these
+entries, so almost every query pays the miss path, and at 715 ms per transaction
+the path is **295× worse** than the uncached origin. Both repetitions agree:
+609 ms / 16.4% and 820 ms / 13.4%.
 
 The observable fact is the hit-ratio collapse. The likely mechanism — and this is
 inference, not measurement — is dependency tracking: a `sum()` over 10,001 rows

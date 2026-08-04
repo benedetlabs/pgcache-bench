@@ -296,8 +296,8 @@ hit ratio**. That is the good case, not the bad one.
 What is actually true is a **cliff, not a slope**. PgCache's per-hit cost was flat
 at ~394 µs across span=10, 100 and 1,000 — the rows the origin scanned never
 reach it, because it stores the result. Then at span=10,000 the hit ratio
-collapsed from 99.1% to **16.4%** and the path became **254× worse** than the
-uncached origin. It stops admitting the entry rather than degrading gracefully.
+collapsed from 99.1% to **14.9%** and the path became **295× worse** than the
+uncached origin, reproducibly across both repetitions. It stops admitting the entry rather than degrading gracefully.
 
 The laptop's 65× was suspected to be Docker Desktop's constrained memory. It is
 not: it reproduces on a 30 GB node, worse.
