@@ -505,6 +505,78 @@ comparação relevante é outra, e esta bancada não a respondeu.
 
 ---
 
+## 8b. O achado que qualifica todos os anteriores: escrita
+
+Tudo nas seções acima foi medido com **zero escrita**. Isso não é um detalhe de
+configuração — é a condição em que quase nenhum sistema de produção vive, e era o
+maior buraco da plataforma. Nenhuma das oito campanhas anteriores tinha escrito
+uma linha durante a medição.
+
+Fechamos isso misturando leitura e escrita, com as escritas batendo **na mesma
+faixa de chaves** que as leituras consultam. Escrever noutro lugar daria um
+número bonito e sem sentido, porque o CDC não teria nada em cache para invalidar.
+
+| escrita | origem tps | PgCache tps | ganho | p99 leitura A | p99 leitura B |
+|---:|---:|---:|---:|---:|---:|
+| 0% | 36.376 | 49.690 | **+37%** | 0,313 ms | 0,264 ms |
+| 5% | 19.175 | 20.120 | +5% | 0,294 ms | 0,484 ms |
+| 10% | 12.573 | 12.308 | **−2%** | 0,300 ms | 0,511 ms |
+| 30% | 4.784 | 4.738 | −1% | 0,312 ms | 0,561 ms |
+| 50% | 2.910 | 2.794 | −4% | 0,319 ms | 0,576 ms |
+
+**A vantagem de vazão desaparece com 10% de escrita** — uma proporção OLTP
+completamente banal.
+
+O motivo é aritmético. Nesta bancada um `UPDATE` custa cerca de 25 vezes um point
+select, e **escritas passam idênticas pelos dois caminhos**: o cache não as
+acelera nem as atrasa. Numa mistura 90/10 elas consomem a maior parte do tempo e
+afogam o ganho do lado da leitura. A vazão total cai de 36.376 para 12.573 no
+próprio caminho sem cache — o gargalo deixou de ser a leitura.
+
+**E há um segundo efeito, que é o custo da coerência aparecendo.** Compare as duas
+últimas colunas. O p99 de leitura da origem é **plano**: 0,294 a 0,319 ms, com 0%
+ou com 50% de escrita. O do PgCache sobe de 0,264 para 0,576 ms — **81% pior**.
+
+A taxa de acerto fica em 98% o tempo todo, então não é o CDC despejando entradas.
+Elas continuam lá e continuam sendo servidas; servi-las é que passa a custar mais
+enquanto o fluxo de invalidação corre em paralelo.
+
+Isso não retrata as seções anteriores — elas mediram o que diziam medir. Mas
+**nenhum número delas pode ser citado sem a proporção de escrita junto.**
+
+### A coerência aguentou
+
+Testamos a única situação em que um cache coerente por CDC pode de fato ser pego
+servindo dado velho: leitura chegando **enquanto** as escritas estão em voo.
+
+O método precisa de cuidado, porque sob mutação concorrente duas leituras podem
+divergir legitimamente. Lemos a origem, o PgCache, e a origem **de novo**. Se as
+duas leituras da origem concordam, a linha ficou estável e a resposta do PgCache
+precisa bater. Se discordam, a amostra é inconclusiva e é descartada — nunca
+contada como divergência.
+
+**1.931 comparações conclusivas, zero divergências.** As 69 inconclusivas provam
+que o teste não foi vazio: são chaves que o escritor de fato alterou dentro da
+janela.
+
+### E uma inferência nossa que caiu
+
+A seção sobre o precipício dizia que o portão de materialização estaria
+*recusando* as entradas grandes. Instrumentamos o contador e ele mostrou o
+contrário, duas vezes.
+
+Em `span=1`, onde o PgCache é **mais rápido**, o portão rejeita as 1.000 entradas
+— recusar materializar significa servir pelo caminho barato, e a rejeição é uma
+decisão boa. Em `span=10000`, onde acontece o colapso, `mv_reject` é **zero**: ele
+admite 118 de 1.000, e as outras 882 não aparecem em contador nenhum.
+
+Então não é uma política recusando trabalho. É consistente com uma fila de
+construção que não dá conta. Continua sendo inferência — mas agora com o
+candidato anterior eliminado por medição, que é a diferença entre um palpite e
+uma hipótese.
+
+---
+
 ## 9. O que sabemos
 
 **O PgCache é semanticamente transparente.** Milhares de comparações diferenciais,
@@ -526,15 +598,25 @@ prepared statements.
 **Existe um precipício em consultas com pegada de invalidação grande**, e ele não
 dá aviso na curva de latência.
 
+**Escrita elimina o ganho.** A 10% de escrita a vantagem de vazão some, e a
+latência de leitura no p99 piora 70%, mesmo com 98% de acerto. O PgCache entrega
+em cargas dominadas por leitura contra uma origem sob pressão — e só aí.
+
+**Os percentis confirmam as médias.** Onde a amostragem é adequada, o p99
+acompanha a média de perto, então as conclusões tiradas de médias nas seções
+anteriores sobrevivem.
+
 ## 10. O que ainda não sabemos
 
-**Escrita sob carga sustentada.** Este é o maior buraco. Tudo que medimos foi
-leitura contra dados estáticos, com exceção da rajada do portão de correção.
-Quanto custa a invalidação por CDC quando o banco está recebendo escrita o tempo
-todo? Qual o atraso de replicação sob carga? Como as tabelas fixadas se comportam
-enquanto as linhas mudam embaixo delas? Nada disso foi medido. É trabalho para o
-sysbench, que é a única das cinco ferramentas que varia a proporção de leitura e
-escrita de forma limpa.
+**Leitura e escrita em faixas separadas.** No teste acima as duas dividem as
+mesmas 1.000 chaves de propósito, que é o pior caso possível para invalidação.
+Uma aplicação real costuma escrever num subconjunto pequeno e ler de um conjunto
+muito maior. Varrer esse gradiente é o experimento mais promissor que sobrou — é
+onde o PgCache pode recuperar a vantagem sob escrita.
+
+**O comportamento das tabelas fixadas sob escrita.** Elas são atualizadas no
+lugar em vez de invalidadas, o que em tese as protege exatamente do efeito medido
+acima. Não testamos.
 
 **Volumes maiores que a memória.** Só rodamos o degrau onde os dados cabem no
 `shared_buffers`. Degraus maiores encarecem a origem e baixam a barra de acerto —
@@ -562,6 +644,7 @@ workload real produz — em vez de dias de cluster.
 | [`synthetic/RESULTS-probe0.md`](synthetic/RESULTS-probe0.md) | a sonda local que produziu a fórmula |
 | [`synthetic/RESULTS-aks-s1.md`](synthetic/RESULTS-aks-s1.md) | calibração e curva de saturação no AKS |
 | [`synthetic/RESULTS-aks-s2.md`](synthetic/RESULTS-aks-s2.md) | crossover, protocolo e o precipício |
+| [`synthetic/RESULTS-aks-s4.md`](synthetic/RESULTS-aks-s4.md) | escrita, coerência concorrente, percentis |
 | [`synthetic/SCENARIOS.md`](synthetic/SCENARIOS.md) | o desenho das campanhas, escrito antes de rodá-las |
 
 Os dados brutos de cada célula estão em `synthetic/results-s1-cells.tsv` e

@@ -56,6 +56,22 @@ data:
     -- two effects could not be told apart.
     \set lo random(1, :hot)
     SELECT sum(abalance) FROM pgbench_accounts WHERE aid BETWEEN :lo AND :lo + :span;
+  s4-write.sql: |
+    -- The write side of the mix.
+    --
+    -- NO BEGIN/END, on purpose. pgbench's own tpcb-like builtin wraps its
+    -- statements in an explicit transaction, and PgCache passes through
+    -- everything inside one -- so a mix built from that builtin would measure
+    -- nothing at all. In autocommit each statement is its own transaction,
+    -- which is what an application issuing a single ORM save actually does.
+    --
+    -- :hot is bounded to the SAME range the read script draws from. That is the
+    -- whole point: the writes must invalidate the entries the reads are hitting.
+    -- Writing to a disjoint range would produce a flattering number that means
+    -- nothing, because CDC would have nothing cached to invalidate.
+    \set aid random(1, :hot)
+    \set delta random(-500, 500)
+    UPDATE pgbench_accounts SET abalance = abalance + :delta WHERE aid = :aid;
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

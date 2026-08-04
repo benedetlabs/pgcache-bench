@@ -46,6 +46,9 @@ data:
     PROTO_SWEEP={{ $c.protocolSweep | quote }}
     CLIENTS={{ $c.clients | quote }}
     HOT={{ $c.hot | quote }}
+    WRITE_SWEEP={{ $c.writeSweep | quote }}
+    W8_RATE={{ $c.w8Rate | quote }}
+    W8_SECS={{ $c.w8Seconds | quote }}
 
     RESULTS=/lab/results/$CAMPAIGN
     TSV=$RESULTS/cells.tsv
@@ -105,17 +108,85 @@ data:
     # its hit ratio is uninterpretable -- that is exactly what made openFGA's r5
     # retractable -- so a missing scrape has to stop the cell rather than record
     # a zero that reads like a cache failure.
+    # Emits, in order: hit miss ratio mv_admit mv_reject mv_hits lag_bytes
+    #                  stale_s invalidations
+    #
+    # The mv_gate counters were added after campaign s2, where the w5 collapse at
+    # span=10000 (hit ratio 99.1% -> 14.9%) was published as an INFERENCE about
+    # materialisation being refused. `pgcache_cache_mv_gate{outcome="reject"}`
+    # measures that directly, so the inference either becomes a fact or gets
+    # withdrawn.
+    #
+    # cdc_lag_bytes and cdc_flush_staleness_seconds are the CDC axis, and they
+    # already exist in the product -- no staleness probe needed.
     hitratio() {
-      local i out h m
+      local i out
       for i in 1 2 3; do
         out=$(curl -s --max-time 30 "$PGCACHE_METRICS" 2>/dev/null | awk '
-          /^pgcache_queries_cache_hit /  {h=$2}
-          /^pgcache_queries_cache_miss / {m=$2}
-          END { if (h=="" && m=="") exit 1; printf "%d %d %.4f", h+0, m+0, (h+m)?h/(h+m):0 }')
+          /^pgcache_queries_cache_hit /                {h=$2}
+          /^pgcache_queries_cache_miss /               {m=$2}
+          /^pgcache_cache_mv_gate\{outcome="admit"\}/  {adm=$2}
+          /^pgcache_cache_mv_gate\{outcome="reject"\}/ {rej=$2}
+          /^pgcache_cache_mv_hits /                    {mvh=$2}
+          /^pgcache_cdc_lag_bytes /                    {lag=$2}
+          /^pgcache_cdc_flush_staleness_seconds /      {st=$2}
+          /^pgcache_cache_invalidations /              {inv=$2}
+          END { if (h=="" && m=="") exit 1;
+                printf "%d %d %.4f %d %d %d %d %s %d",
+                  h+0, m+0, (h+m)?h/(h+m):0, adm+0, rej+0, mvh+0, lag+0,
+                  (st==""?"0":st), inv+0 }')
         [ -n "$out" ] && { printf '%s' "$out"; return 0; }
         sleep 5
       done
       abort "metrics scrape failed three times; a cell without a hit ratio cannot be interpreted"
+    }
+
+    # Percentiles from pgbench's own per-transaction log.
+    #
+    # Campaigns s1 and s2 reported MEAN latency, because that is what pgbench
+    # prints. For a latency claim the mean is the weakest statistic available: a
+    # cache's damage lives in the tail, because a miss costs several times a hit.
+    # Reporting a mean improvement while saying nothing about p99 is the kind of
+    # half-measurement this lab has already had to retract once.
+    #
+    # --sampling-rate keeps it affordable. At 140,000 tps a full log is gigabytes
+    # per cell; 1% is still tens of thousands of samples, far more than a p99
+    # needs.
+    #
+    # Log lines are "client_id transaction_no time script_no ...", with `time` in
+    # microseconds as field 3 and a zero-based script number as field 4. With
+    # -j 4 pgbench writes one file per thread, hence the glob.
+    #
+    # FILTERED TO SCRIPT 0, WHICH IS ALWAYS THE READ SCRIPT. This matters as soon
+    # as w6 mixes in writes. Measured on this cluster, an UPDATE costs 4.879 ms
+    # against 0.191 ms for the point select -- 25x -- so an unfiltered p99 over a
+    # 90/10 mix reports 5.69 ms and is describing WAL flush, not the cache. And
+    # writes pass through both paths identically, so including them would
+    # compress the A/B difference toward zero for a reason that has nothing to do
+    # with caching.
+    #
+    # So: `mean_ms` in the TSV is pgbench's overall mean across all scripts, and
+    # the percentiles are the READ path alone. The columns mean different things
+    # on purpose, and the report has to say so.
+    percentiles() {
+      ex 'cat /tmp/plog.* 2>/dev/null | awk "\$4==0 {print \$3}" | sort -n > /tmp/plat.txt' >/dev/null 2>&1
+      # REFUSES to report below 200 samples.
+      #
+      # Campaign s3 caught this the honest way: the span=10000 cell ran at 10 tps,
+      # so 45 s at a 1% sampling rate produced about four samples, and the "p99"
+      # came out at 296 ms against a MEAN of 794 ms. A p99 below the mean is
+      # arithmetically impossible for latency and is the tell that the sample is
+      # too small to mean anything.
+      #
+      # Printing "-" is the correct output here. Reporting a number computed from
+      # four samples would be worse than reporting nothing, because it looks like
+      # a measurement.
+      ex 'awk "{v[NR]=\$1}
+             END{ if(NR<200){print \"- - -\"; exit}
+                  a=int(NR*0.50); b=int(NR*0.95); c=int(NR*0.99);
+                  if(a<1)a=1; if(b<1)b=1; if(c<1)c=1;
+                  printf \"%.3f %.3f %.3f\n\", v[a]/1000, v[b]/1000, v[c]/1000 }" /tmp/plat.txt' \
+        2>/dev/null | tr -d '\r'
     }
 
     # One measured cell. Emits a TSV row and echoes a human line.
@@ -138,23 +209,40 @@ data:
         ex "pgbench -h $hostvar -p $portvar -U \$PGUSER -n -M $proto -c $clients -j 4 -T ${WARMUP%s} $* \$PGDATABASE" >/dev/null 2>&1
       fi
 
-      local out lat tps hm
-      out=$(ex "pgbench -h $hostvar -p $portvar -U \$PGUSER -n -M $proto -c $clients -j 4 -T ${DUR%s} $* \$PGDATABASE" 2>&1) \
+      local out lat tps
+      ex 'rm -f /tmp/plog.* /tmp/plat.txt' >/dev/null 2>&1
+      out=$(ex "pgbench -h $hostvar -p $portvar -U \$PGUSER -n -M $proto -c $clients -j 4 -T ${DUR%s} \
+                --log --log-prefix=/tmp/plog --sampling-rate=0.01 $* \$PGDATABASE" 2>&1) \
         || abort "$phase/$path/$param=$value: pgbench failed: $(echo "$out" | tail -3)"
-      lat=$(echo "$out" | awk '/latency average/{print $4}')
-      tps=$(echo "$out" | awk '/^tps/{printf "%.0f", $3}')
+      # ANCHORED to start-of-line, and stops at the first match.
+      #
+      # With more than one -f script pgbench prints a per-script block after the
+      # summary, each containing its own " - latency average = ..." line. The
+      # unanchored pattern matched all three and `lat` became a multi-line
+      # string, which silently broke the printf and wrote misaligned TSV rows for
+      # every w6 cell in campaign s3. It did not trip the empty-value guard,
+      # because a multi-line string is not empty.
+      lat=$(echo "$out" | awk '/^latency average/{print $4; exit}')
+      tps=$(echo "$out" | awk '/^tps/{printf "%.0f", $3; exit}')
       [ -z "$lat" ] && abort "$phase/$path/$param=$value: pgbench produced no latency line"
 
-      # hit/miss/ratio as three plain fields. An earlier version passed a
+      local p50=- p95=- p99=-
+      read -r p50 p95 p99 <<<"$(percentiles)"
+
+      # Each metric as its own plain field. An earlier version passed a
       # tab-separated blob through a shell interpolation into the TSV writer,
       # which is a column-alignment bug waiting to happen the first time a field
       # comes back empty.
-      local hit=- miss=- ratio=-
-      if [ "$path" = B ]; then read -r hit miss ratio <<<"$(hitratio)"; fi
-      ex "printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-          '$CAMPAIGN' '$phase' '$path' '$param' '$value' '$clients' '$lat' '$tps' '$hit' '$miss' '$ratio' >> $TSV"
-      printf '  %-3s path %s  %-8s=%-9s c=%-4s %-9s lat=%8s ms  tps=%9s  ratio=%s\n' \
-        "$phase" "$path" "$param" "$value" "$clients" "$proto" "$lat" "$tps" "$ratio"
+      local hit=- miss=- ratio=- adm=- rej=- mvh=- lag=- stale=- inv=-
+      if [ "$path" = B ]; then
+        read -r hit miss ratio adm rej mvh lag stale inv <<<"$(hitratio)"
+      fi
+      ex "printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+          '$CAMPAIGN' '$phase' '$path' '$param' '$value' '$clients' '$proto' \
+          '$lat' '$p50' '$p95' '$p99' '$tps' \
+          '$hit' '$miss' '$ratio' '$adm' '$rej' '$mvh' '$lag' '$stale' >> $TSV"
+      printf '  %-3s path %s  %-8s=%-9s c=%-4s %-9s mean=%8s p99=%9s ms  tps=%9s  hit=%s  mv_rej=%s  lag=%s\n' \
+        "$phase" "$path" "$param" "$value" "$clients" "$proto" "$lat" "$p99" "$tps" "$ratio" "$rej" "$lag"
       check_health
     }
 
@@ -163,7 +251,7 @@ data:
     kubectl -n "$NS" rollout status deploy/loadgen --timeout=900s >/dev/null 2>&1 \
       || abort "loadgen never became ready"
 
-    ex "mkdir -p $RESULTS && [ -f $TSV ] || printf 'campaign\tphase\tpath\tparam\tvalue\tclients\tlat_ms\ttps\thit\tmiss\tratio\n' > $TSV" \
+    ex "mkdir -p $RESULTS && [ -f $TSV ] || printf 'campaign\tphase\tpath\tparam\tvalue\tclients\tproto\tmean_ms\tp50_ms\tp95_ms\tp99_ms\ttps\thit\tmiss\tratio\tmv_admit\tmv_reject\tmv_hits\tcdc_lag_bytes\tcdc_stale_s\n' > $TSV" \
       || abort "could not create results directory"
 
     echo "--- seeding pgbench scale=$SCALE against the ORIGIN ---"
@@ -305,6 +393,100 @@ data:
           cell w5 B span "$sp" "$CLIENTS" simple -f /scripts/s3-range.sql -D hot=$HOT -D span=$sp
         done
       done
+    fi
+
+    # ── w6 · write mix · the axis that tests what PgCache is FOR ─────────────
+    #
+    # Every campaign before this one ran read-only against static data. That
+    # means everything measured so far could have been produced by any read
+    # cache. Coherence via CDC is the reason PgCache exists rather than a TTL
+    # cache, and its cost had never been measured.
+    #
+    # The mix uses pgbench's @weight on two scripts rather than sysbench. The
+    # earlier analysis called sysbench "the only tool that varies read/write
+    # cleanly" and undervalued this flag: @weight does exactly that, in
+    # autocommit, in simple protocol, with no extra image and none of sysbench's
+    # two traps (--skip_trx=on being mandatory, and --db-ps-mode=disable slowing
+    # the ORIGIN and thereby flattering the cache).
+    #
+    # The writes hit the SAME key range the reads draw from. Writing elsewhere
+    # would give a flattering number that means nothing, because CDC would have
+    # nothing cached to invalidate.
+    if has w6; then
+      echo "--- w6 · write mix sweep ---"
+      for r in $(seq 1 "$REPS"); do
+        for w in $WRITE_SWEEP; do
+          local_read=$((100 - w))
+          if [ "$w" -eq 0 ]; then
+            cell w6 A write_pct "$w" "$CLIENTS" simple -f /scripts/s1-hot.sql -D hot=$HOT
+            cell w6 B write_pct "$w" "$CLIENTS" simple -f /scripts/s1-hot.sql -D hot=$HOT
+          else
+            cell w6 A write_pct "$w" "$CLIENTS" simple \
+              -f /scripts/s1-hot.sql@$local_read -f /scripts/s4-write.sql@$w -D hot=$HOT
+            cell w6 B write_pct "$w" "$CLIENTS" simple \
+              -f /scripts/s1-hot.sql@$local_read -f /scripts/s4-write.sql@$w -D hot=$HOT
+          fi
+        done
+      done
+    fi
+
+    # ── w8 · correctness DURING concurrent writes · BLOCKING ─────────────────
+    #
+    # w7 checks correctness after a write burst has settled. That is the easy
+    # case. The hard case -- and the only one where a CDC-coherent cache can
+    # actually be caught serving stale data -- is a read arriving while writes
+    # are in flight.
+    #
+    # Method, because comparing two hosts under concurrent mutation needs care:
+    # read the origin, read PgCache, read the origin AGAIN. If the two origin
+    # reads agree, the row was stable across the window, so PgCache's answer MUST
+    # match it. If they disagree the row changed mid-window and the sample is
+    # inconclusive -- counted and reported, never scored as a divergence. That
+    # keeps the test honest in both directions: it cannot produce a false
+    # divergence, and it cannot hide a real one.
+    #
+    # The writer is RATE-LIMITED with -R on purpose. Unthrottled against a 1,000
+    # key hot set it would change every key inside every window and every sample
+    # would be inconclusive -- a test that always passes because it never
+    # concludes anything.
+    if has w8; then
+      echo "--- w8 · correctness under concurrent writes ---"
+      cold_pgcache
+      echo "  warming the cache so there is something to invalidate"
+      ex "pgbench -h \$PGCACHE_HOST -p \$PGCACHE_PORT -U \$PGUSER -n -M simple -c 4 -j 4 -T 30 -f /scripts/s1-hot.sql -D hot=$HOT \$PGDATABASE" >/dev/null 2>&1
+
+      echo "  starting rate-limited writer (${W8_RATE}/s over $HOT keys, ${W8_SECS}s)"
+      ex "nohup pgbench -h \$ORIGIN_HOST -p \$ORIGIN_PORT -U \$PGUSER -n -M simple -c 2 -j 2 \
+            -T $W8_SECS -R $W8_RATE -f /scripts/s4-write.sql -D hot=$HOT \$PGDATABASE \
+            > /tmp/w8writer.log 2>&1 &" >/dev/null 2>&1
+      sleep 5
+
+      w8pass=0; w8div=0; w8incon=0
+      for batch in 1 2 3 4 5; do
+        ex "awk 'BEGIN{srand($RANDOM+$batch); for(i=0;i<400;i++){k=int(rand()*$HOT)+1;
+              printf \"select aid,abalance from pgbench_accounts where aid = %d;\n\", k}}' > /tmp/w8.sql" \
+          || abort "w8: could not build the statement list"
+        ex 'psql -h $ORIGIN_HOST  -p $ORIGIN_PORT  -U $PGUSER -d $PGDATABASE -tA -f /tmp/w8.sql > /tmp/w8.o1' || abort "w8: origin read 1 failed"
+        ex 'psql -h $PGCACHE_HOST -p $PGCACHE_PORT -U $PGUSER -d $PGDATABASE -tA -f /tmp/w8.sql > /tmp/w8.b'  || abort "w8: pgcache read failed"
+        ex 'psql -h $ORIGIN_HOST  -p $ORIGIN_PORT  -U $PGUSER -d $PGDATABASE -tA -f /tmp/w8.sql > /tmp/w8.o2' || abort "w8: origin read 2 failed"
+        read -r p d n <<<"$(ex 'paste /tmp/w8.o1 /tmp/w8.b /tmp/w8.o2 | awk -F"\t" "
+             { if (\$1 != \$3) { incon++ }
+               else if (\$1 == \$2) { pass++ }
+               else { div++; if (div<=5) print \"  DIVERGENCE origin=[\" \$1 \"] pgcache=[\" \$2 \"]\" > \"/dev/stderr\" } }
+             END { printf \"%d %d %d\n\", pass+0, div+0, incon+0 }"')"
+        w8pass=$((w8pass + p)); w8div=$((w8div + d)); w8incon=$((w8incon + n))
+        echo "    batch $batch: $p conclusive-ok, $d divergent, $n inconclusive (row changed mid-window)"
+        sleep 8
+      done
+
+      lagline=$(curl -s --max-time 30 "$PGCACHE_METRICS" 2>/dev/null \
+        | awk '/^pgcache_cdc_lag_bytes /{l=$2} /^pgcache_cdc_flush_staleness_seconds /{s=$2}
+               /^pgcache_cache_invalidations /{i=$2} END{printf "lag=%s bytes  staleness=%ss  invalidations=%s", l, s, i}')
+      echo "  totals: $w8pass conclusive-ok, $w8div DIVERGENT, $w8incon inconclusive"
+      echo "  CDC at end of window: $lagline"
+      ex "printf 'w8\tconclusive_ok=%s\tdivergent=%s\tinconclusive=%s\t%s\n' '$w8pass' '$w8div' '$w8incon' '$lagline' >> $RESULTS/w8.txt"
+      [ "$w8div" -eq 0 ] || abort "w8: $w8div divergences under concurrent writes"
+      [ "$w8pass" -gt 200 ] || abort "w8: only $w8pass conclusive samples; the writer rate is too high to conclude anything"
     fi
 
     echo "=== campaign $CAMPAIGN complete ==="

@@ -312,6 +312,22 @@ not: it reproduces on a 30 GB node, worse.
 latency curve looks smooth right up to the edge. Evidence:
 `synthetic/RESULTS-aks-s2.md` §w5.
 
+**MECHANISM CORRECTED 2026-08-04 by campaign s3.** s2 inferred that the
+materialisation gate was *rejecting* the oversized entries. Instrumenting
+`pgcache_cache_mv_gate` showed the opposite, twice over:
+
+- At span=1, where PgCache is **fastest** (0.164 ms against the origin's 0.291),
+  the gate **rejects all 1,000** entries. Refusing to materialise means serving
+  from the cheap plain-cache path. A rejection is a good decision, not a symptom.
+- At span=10,000, where the collapse happens, `mv_reject` is **0**. The gate
+  admits **118 of 1,000**, and the remaining 882 appear in neither counter.
+
+So the cliff is not a policy refusing work. It is consistent with a build queue
+that cannot keep up: the rest stay pending, never complete inside the window, and
+every query for them misses. Confirming that needs
+`pgcache_cache_mv_build_queue` recorded per cell, which no campaign has done yet.
+The observable test above is unchanged. Evidence: `synthetic/RESULTS-aks-s4.md` §3.
+
 ---
 
 ## C10 — The hit ratio must clear the break-even, and break-even is computable
@@ -357,3 +373,59 @@ campaigns — it was not, because O≈40 µs and H≈45 µs meant **condition 1 
 and no hit ratio whatsoever could have worked. NetBox reached only 40%, failing
 **condition 2** by a wide margin. Had C10 existed, neither would have reached a
 campaign, and the D-24 configuration hunt would never have started.
+
+
+---
+
+## C11 — The write ratio is as disqualifying as the hit ratio
+
+**Severity:** fatal above roughly 10% writes · **Cost:** one sweep
+
+C9, C9b and C10 all assume a read workload. Every campaign this platform ran
+before 2026-08-04 was read-only against static data, which means every number it
+published described a condition most production systems never sit in.
+
+**The rule:** measure the fraction of transactions that write to the tables the
+cache covers. Above roughly 10%, expect the throughput advantage to be gone.
+
+**Two independent mechanisms, and the first is pure arithmetic.**
+
+1. **Writes pass through both paths identically and dominate the mix.** Measured
+   here, an `UPDATE` costs ~25x a primary-key select (4.879 ms against 0.191 ms).
+   At a 90/10 read/write mix the writes consume most of the time budget, and the
+   cache neither accelerates nor delays them. Total throughput fell from 36,376
+   tps at 0% writes to 12,573 at 10% **on the uncached path alone** -- the
+   bottleneck stops being the read.
+
+2. **Reads through the cache get slower under write load; reads against the
+   origin do not.** This is the cost of coherence, and it had never been measured.
+
+| writes | origin tps | PgCache tps | tps | read p99 A | read p99 B | read p99 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0% | 36,376 | 49,690 | **+37%** | 0.313 ms | 0.264 ms | −16% |
+| 5% | 19,175 | 20,120 | +5% | 0.294 ms | 0.484 ms | **+65%** |
+| 10% | 12,573 | 12,308 | **−2%** | 0.300 ms | 0.511 ms | **+70%** |
+| 30% | 4,784 | 4,738 | −1% | 0.312 ms | 0.561 ms | +80% |
+| 50% | 2,910 | 2,794 | −4% | 0.319 ms | 0.576 ms | +81% |
+
+The origin's read p99 is **flat** across the whole sweep. PgCache's rises 81%.
+And the hit ratio holds at 98% throughout, so this is not CDC evicting entries --
+the entries are still there and still being served, they just cost more to serve
+while the invalidation stream runs alongside.
+
+**Test:** run the workload's real read/write ratio, with the writes hitting the
+same key range the reads draw from. Writing to a disjoint range produces a
+flattering number that means nothing, because CDC has nothing cached to
+invalidate.
+
+**Origin:** pgbench campaigns s3/s4, 2026-08-04.
+Evidence: `synthetic/RESULTS-aks-s4.md` §1.
+
+**Scope note.** This does not retract campaigns s1 and s2 -- they measured what
+they said they measured, at 0% writes. It means no number from them may be quoted
+without its write ratio attached.
+
+**Not yet measured:** reads and writes on *separate* key ranges. The sweep above
+deliberately overlaps them completely, which is the worst case for invalidation.
+Real applications usually write a subset and read a superset, and that gradient
+is the most promising experiment left.

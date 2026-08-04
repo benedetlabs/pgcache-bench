@@ -205,3 +205,12 @@ campaign:
   clients: 8
   # Hot set used by every sweep that is not w1.
   hot: 1000
+
+  # w6 -- percentage of transactions that are UPDATEs, via pgbench @weight.
+  writeSweep: "0 5 10 30 50"
+
+  # w8 -- the writer is rate-limited on purpose. Unthrottled against a 1,000-key
+  # hot set it changes every key inside every sampling window, every sample comes
+  # back inconclusive, and the test passes by never concluding anything.
+  w8Rate: 50
+  w8Seconds: 120
