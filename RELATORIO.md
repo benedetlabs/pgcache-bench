@@ -646,6 +646,8 @@ workload real produz — em vez de dias de cluster.
 | [`synthetic/RESULTS-aks-s1.md`](synthetic/RESULTS-aks-s1.md) | calibração e curva de saturação no AKS |
 | [`synthetic/RESULTS-aks-s2.md`](synthetic/RESULTS-aks-s2.md) | crossover, protocolo e o precipício |
 | [`synthetic/RESULTS-aks-s4.md`](synthetic/RESULTS-aks-s4.md) | escrita, coerência concorrente, percentis |
+| [`synthetic/RESULTS-shapes.md`](synthetic/RESULTS-shapes.md) | as dez formas de query, isoladas |
+| [`synthetic/RESULTS-multitenant.md`](synthetic/RESULTS-multitenant.md) | SaaS multi-tenant — o primeiro ganho de ordem de grandeza |
 | [`synthetic/SCENARIOS.md`](synthetic/SCENARIOS.md) | o desenho das campanhas, escrito antes de rodá-las |
 
 Os dados brutos de cada célula estão em `synthetic/results-s1-cells.tsv` e

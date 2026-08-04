@@ -425,7 +425,32 @@ Evidence: `synthetic/RESULTS-aks-s4.md` §1.
 they said they measured, at 0% writes. It means no number from them may be quoted
 without its write ratio attached.
 
-**Not yet measured:** reads and writes on *separate* key ranges. The sweep above
-deliberately overlaps them completely, which is the worst case for invalidation.
-Real applications usually write a subset and read a superset, and that gradient
-is the most promising experiment left.
+**QUALIFIED 2026-08-04 by the multi-tenant campaign, one day later.** The
+threshold above is not "10% of transactions". It is **what share of the time
+budget the writes consume**, and the two only coincide when reads are cheap.
+
+The s4 sweep had reads at 0.191 ms and writes at 4.879 ms -- writes cost 25x more,
+so at a 10% write ratio they took roughly three quarters of the clock. Since
+writes pass through both paths identically, the cache had nothing to accelerate
+in the part that dominated.
+
+The multi-tenant campaign inverted that ratio: an 8-statement dashboard costs the
+origin ~79 ms and the write is one indexed `UPDATE`. At the same 10% write ratio,
+the gain was still **+929%**, with a 100% hit ratio.
+
+| campaign | read cost | write cost | 10% writes | gain |
+|---|---:|---:|---|---:|
+| s4, point select | 0.191 ms | 4.879 ms | ~74% of the clock | **−2%** |
+| mt1, dashboard | ~79 ms | indexed UPDATE | negligible | **+929%** |
+
+**Write concentration was NOT the explanation**, and that hypothesis is now
+falsified. Concentrating writes on 1 tenant instead of spreading them over 200
+moved the gain from +958% to +929% -- 29 points out of nine hundred.
+
+**Corrected test:** measure the read and the write separately, then compute
+`w·W / (w·W + (1−w)·R)`. Above roughly half, the cache cannot reach the part of
+the request that matters, whatever the hit ratio.
+
+Evidence: `synthetic/RESULTS-multitenant.md`. This qualifies C11 rather than
+retracting it -- s4 measured its own regime correctly; the error was
+generalising from one regime to all.
