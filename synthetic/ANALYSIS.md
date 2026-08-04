@@ -181,7 +181,7 @@ headless in a Job, for the least return.
 
 ---
 
-### 4. BenchBase — **defer; strongest *if* one thing checks out**
+### 4. BenchBase — **reject** (was: defer, until the source was read)
 
 CMU's framework. The genuine attraction is that it is the only tool here with
 **realistic multi-table read workloads**: Wikipedia (read-heavy, skewed),
@@ -201,12 +201,37 @@ protocol correctly (Strapi spike, 25/25 statements), which means the *right*
 experiment is `preferQueryMode=extended` — the default — and that has never been
 tested at load.
 
-**Also:** most BenchBase workloads are transactional by construction, so C2 bites
-the same way it does in sysbench, and BenchBase exposes no `skip_trx` equivalent.
-Wikipedia and the read-only YCSB profiles are the plausible survivors.
+**But the JDBC question is moot, because C2 kills it first.** This section
+originally read "defer, blocked by a protocol question". Reading the source
+settled it the other way.
 
-**Verdict: defer.** Revisit only after pgbench has established the envelope, and
-enter it with `preferQueryMode=extended` as the reference arm.
+`src/main/java/com/oltpbenchmark/api/Worker.java` calls `setAutoCommit(false)`
+**in the constructor**, once, for the connection's whole lifetime:
+
+```java
+this.conn = this.benchmark.makeConnection();
+this.conn.setAutoCommit(false);
+this.conn.setTransactionIsolation(this.configuration.getIsolationMode());
+```
+
+Every transaction is then `executeWork(...)` followed by `conn.commit()`. With
+autocommit off, pgjdbc emits `BEGIN` before the first statement of each one, so
+**every read in every BenchBase workload runs inside an explicit transaction** —
+and PgCache passes through everything inside `BEGIN…COMMIT`.
+
+That is C2, and it is fatal. It is also not tunable: the call is in the
+constructor, not per transaction, and there is no `skip_trx` equivalent. Escaping
+it means patching BenchBase, and then it is not BenchBase.
+
+The Strapi spike already measured what this costs: the identical statement cached
+25/25 outside a transaction and **0/25 inside one**, with a pre-warmed entry still
+not served.
+
+`sample_wikipedia_config.xml` compounds it by pinning
+`TRANSACTION_SERIALIZABLE`.
+
+**Verdict: reject.** Recorded so it is not re-proposed as "the one with realistic
+workloads" — it is, and none of them reach the cache.
 
 ---
 
@@ -235,7 +260,7 @@ YCSB as their origin.
 |---|---|---|---|
 | 1 | **pgbench** | adopt | simple protocol by default; hit ratio as a dial; zero packaging |
 | 2 | **sysbench** | adopt, scoped | the write/CDC axis, never yet measured |
-| 3 | BenchBase | defer | realistic multi-table reads — behind a JDBC protocol question |
+| 3 | BenchBase | **reject** | realistic multi-table reads, none of which leave a transaction |
 | 4 | YCSB | reject | duplicates pgbench in a worse protocol |
 | 5 | HammerDB | reject | server-side functions; nothing reaches the cache |
 

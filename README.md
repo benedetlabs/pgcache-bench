@@ -8,6 +8,10 @@ The question every project here answers, with its own workload:
 > Does a **database-level read cache, coherent via CDC**, beat the application's
 > own caching (or no caching) — in latency *and* in correctness?
 
+**Start with [REPORT.md](REPORT.md)** — the narrative account of every campaign so
+far, written to be read end to end. The per-campaign reports linked from it hold
+the raw numbers.
+
 Runs on Kubernetes deliberately: local runs starve for resources and produce
 numbers that blame the machine, not the cache. Every lab here learned that the
 hard way — see the openFGA defect log.
