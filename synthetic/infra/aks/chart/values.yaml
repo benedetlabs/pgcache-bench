@@ -95,7 +95,22 @@ pgcache:
   # pgbench's four tables. pgbench_history is write-only in tpcb-like and never
   # read, but it is listed so an invalidation on it is observable rather than
   # silently out of scope.
-  allowedTables: "pgbench_accounts,pgbench_branches,pgbench_tellers,pgbench_history"
+  # SET HERE, NEVER VIA `helm --set`.
+  #
+  # `helm --set` and `--set-string` split unescaped commas into separate
+  # assignments, so a table list passed on the command line is silently
+  # discarded -- `helm get values` comes back empty and the deployment keeps the
+  # chart default. That was already recorded as a defect on the openFGA lab, and
+  # it still cost a full 10-cell probe here: every shape reported a 0.0% hit
+  # ratio, including a plain primary-key lookup that reaches 98% when the tables
+  # are actually allowed.
+  #
+  # Escaping (`a\,b`) works, but a list that lives in the file is recorded in the
+  # release and cannot be mistyped at the prompt.
+  #
+  # Both workloads' tables, so the pgbench sweeps and the application-shaped
+  # scenarios can run against the same deployment.
+  allowedTables: "pgbench_accounts,pgbench_branches,pgbench_tellers,pgbench_history,product,category,seller,customer,orders,order_item,review"
 
   # STOCK for the reference campaign, deliberately.
   #
