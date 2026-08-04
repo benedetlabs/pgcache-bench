@@ -96,11 +96,26 @@ data:
     # pool and reaches the metrics port over the node IP, which is what the
     # headless Service resolves to under hostNetwork.
     PGCACHE_METRICS="http://pgcache.$NS.svc.cluster.local:{{ .Values.pgcache.metricsPort }}/metrics"
+
+    # Retried, and a total failure ABORTS the cell.
+    #
+    # Campaign s1 recorded ratio=0.0000 on the three highest-concurrency cells
+    # because a single 10 s curl timed out; scraped by hand afterwards the same
+    # cache was at 99.25% (12,089,948 hits / 91,810 misses). A latency without
+    # its hit ratio is uninterpretable -- that is exactly what made openFGA's r5
+    # retractable -- so a missing scrape has to stop the cell rather than record
+    # a zero that reads like a cache failure.
     hitratio() {
-      curl -s --max-time 10 "$PGCACHE_METRICS" 2>/dev/null | awk '
-        /^pgcache_queries_cache_hit /  {h=$2}
-        /^pgcache_queries_cache_miss / {m=$2}
-        END { printf "%d %d %.4f", h+0, m+0, (h+m)?h/(h+m):0 }'
+      local i out h m
+      for i in 1 2 3; do
+        out=$(curl -s --max-time 30 "$PGCACHE_METRICS" 2>/dev/null | awk '
+          /^pgcache_queries_cache_hit /  {h=$2}
+          /^pgcache_queries_cache_miss / {m=$2}
+          END { if (h=="" && m=="") exit 1; printf "%d %d %.4f", h+0, m+0, (h+m)?h/(h+m):0 }')
+        [ -n "$out" ] && { printf '%s' "$out"; return 0; }
+        sleep 5
+      done
+      abort "metrics scrape failed three times; a cell without a hit ratio cannot be interpreted"
     }
 
     # One measured cell. Emits a TSV row and echoes a human line.
