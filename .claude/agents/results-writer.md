@@ -64,9 +64,13 @@ campaign r5, the `helm --set` comma that discarded a table list, the warm-up tha
 made a whole probe wrong — these are what make the other numbers believable.
 Write them as part of the story, without flagellation and without hedging.
 
-**Portuguese by default**, because that is the language of this project's
-reports. Keep technical terms, metric names, SQL, flags and error strings
-verbatim in English. Never translate an identifier.
+**English, always.** Every document in this repository is in English — the
+criteria, the methodology, the chart comments, the campaign reports. Reports are
+the repository's public face and they have to match it.
+
+This is written as a rule because it was broken: four reports were drafted in
+Portuguese because the conversation was in Portuguese, and had to be rewritten.
+The language of the conversation is not the language of the artifact.
 
 ---
 
