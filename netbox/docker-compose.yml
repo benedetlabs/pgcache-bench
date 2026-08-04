@@ -1,0 +1,113 @@
+# NetBox lab — local stack for the C9 probe.
+#
+# Two paths only: A (origin) and B (PgCache). NetBox has no cross-request object
+# cache of its own — it removed cacheops years ago, and its Redis holds only the
+# config revision and the plugin catalogue — so there is no path C here. That is
+# a real loss of a reference point, and it is also why NetBox is a fair subject:
+# on openFGA, path C won almost everything, because the application's own cache
+# removes the queries instead of accelerating them.
+#
+# This compose exists to answer ONE question before any cluster time is spent:
+# criterion C9 — is the origin's per-query cost above PgCache's ~45 us floor? If
+# it is not, no configuration saves the subject and we stop here.
+
+name: netbox-pgcache-lab
+
+x-netbox-common: &netbox-common
+  image: netboxcommunity/netbox:latest
+  depends_on:
+    origin: {condition: service_healthy}
+    redis: {condition: service_started}
+  volumes:
+    - ./config/configuration.py:/etc/netbox/config/configuration.py:ro
+  environment: &netbox-env
+    DB_NAME: netbox
+    DB_USER: netbox
+    DB_PASSWORD: netboxpass
+    REDIS_HOST: redis
+    SKIP_STARTUP_SCRIPTS: "true"
+    SUPERUSER_NAME: admin
+    SUPERUSER_EMAIL: admin@lab.local
+    SUPERUSER_PASSWORD: adminpass
+    # Fixed token so the generator authenticates without a login round trip.
+    # Token auth keeps the read path at 100% cacheable (STUDY 1.4); session auth
+    # drags in the one non-cacheable django_session lookup.
+    SUPERUSER_API_TOKEN: "0123456789abcdef0123456789abcdef01234567"
+
+services:
+  # ── Origin ────────────────────────────────────────────────────────────────
+  # shared_buffers pinned at 1 GB, same as the openFGA lab, so the scale ladder
+  # measures scalability rather than "how much RAM did I give Postgres".
+  origin:
+    image: postgres:17
+    command: >
+      postgres -c shared_buffers=1GB -c max_connections=200
+               -c shared_preload_libraries=pg_stat_statements
+               -c pg_stat_statements.track=all
+               -c wal_level=logical -c max_replication_slots=8
+               -c max_wal_senders=8
+    environment:
+      POSTGRES_DB: netbox
+      POSTGRES_USER: netbox
+      POSTGRES_PASSWORD: netboxpass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netbox -d netbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes: [origin-data:/var/lib/postgresql/data]
+    ports: ["55432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+
+  # ── PgCache ───────────────────────────────────────────────────────────────
+  # Pinned tables and the warm-up knee both come from what openFGA taught us
+  # (D-24): measuring the stock configuration and calling it "PgCache" produced
+  # nine cells of a conclusion we had to retract. Left stock here on purpose —
+  # the C9 probe measures the floor, and tuning comes after the subject passes.
+  pgcache:
+    image: pgcache/pgcache:latest
+    depends_on:
+      origin: {condition: service_healthy}
+    environment:
+      UPSTREAM_URL: postgres://netbox:netboxpass@origin:5432/netbox
+      LISTEN_PORT: "6432"
+      METRICS_PORT: "9090"
+      NUM_WORKERS: "4"
+      # The five tables the read path actually touches, from STUDY 6.1. Narrower
+      # than "everything" on purpose: every extra table is shape space spent on
+      # traffic the workload never issues.
+      ALLOWED_TABLES: "dcim_device,dcim_interface,ipam_prefix,ipam_ipaddress,extras_cachedvalue"
+      PINNED_TABLES: "dcim_device,dcim_interface,ipam_prefix,ipam_ipaddress,extras_cachedvalue"
+      PGCACHE_TELEMETRY: "off"
+    ports: ["56432:6432", "59090:9090"]
+
+  # ── The two paths ─────────────────────────────────────────────────────────
+  netbox-a:
+    <<: *netbox-common
+    environment:
+      <<: *netbox-env
+      DB_HOST: origin
+      DB_PORT: "5432"
+    ports: ["8080:8080"]
+
+  netbox-b:
+    <<: *netbox-common
+    depends_on:
+      origin: {condition: service_healthy}
+      redis: {condition: service_started}
+      pgcache: {condition: service_started}
+    environment:
+      <<: *netbox-env
+      DB_HOST: pgcache
+      DB_PORT: "6432"
+      # Only path A creates the superuser. Two NetBox instances racing the same
+      # migration lock is a startup failure, and path B writing through the cache
+      # during bootstrap is not something we want to have to reason about.
+      SKIP_SUPERUSER: "true"
+    ports: ["8090:8080"]
+
+volumes:
+  origin-data:

@@ -73,7 +73,18 @@ at the end of this section.
 
 ---
 
-### 1. NetBox — `promising`
+### 1. NetBox — `demoted` (was `promising`)
+
+**Reversed 2026-08-04 by criterion C9b**, which did not exist when this entry was
+written. Probe 0 measured the datastore at **3.2%** of wall time on the UI prefix
+list and **27.3%** on the API device list, and PgCache came out slower than the
+uncached origin on both — stock and with pinned tables plus a warm cache, at two
+rungs. See `netbox/RESULTS-probe0.md`. One test would settle it: the same probe
+through real HTTP at rung S2. Everything below remains true and is what made it
+the top pick; none of it was wrong, it just was not sufficient.
+
+**Original entry (2026-08-03):**
+
 
 **URL:** https://github.com/netbox-community/netbox · Apache-2.0 · active
 (pushed 2026-08-03) · clone at `_sources/netbox`

@@ -169,3 +169,93 @@ that taught it, with a date and a pointer to the artifact holding the evidence.
 A criterion that turns out to be wrong gets **corrected in place with a note**,
 not deleted. C3 is the model: it was a real blocker, it was resolved by
 measurement, and the record of that is what stops it being re-litigated.
+
+---
+
+## C9 — The origin's per-query cost must exceed the proxy's floor
+
+**Severity:** demoting, and fatal in the extreme case · **Cost:** clone, then
+one measurement
+
+C1–C8 all ask *can this be cached?* None of them asks *is it worth caching?* A
+subject can pass every structural screen and still be a bad subject, because
+PgCache is a network proxy with an embedded PostgreSQL: a cache **hit** is a
+full SQL round trip to a local database, not a memory read. That gives it a
+floor. Below that floor, a "cache" is pure overhead.
+
+**The rule:** estimate the origin's amortised cost per query. If it is not
+comfortably above PgCache's serving floor — measured at **~45 µs** on dedicated
+AKS nodes — the subject cannot show a gain no matter how the cache is
+configured, and the campaign will measure proxy overhead instead of caching.
+
+**Test, in order of cost:**
+
+1. *Does the working set fit in RAM?* Sum the table sizes the read path touches
+   and compare against the origin's `shared_buffers` **and** the node's memory.
+   If the whole dataset lives in the buffer pool, the origin is already a cache
+   and the experiment is cache-versus-cache.
+2. *Are the queries cheap by construction?* Single-table lookups with equality
+   predicates on covering indexes, returning few rows, are ~40 µs served warm.
+   Joins, aggregates, sorts, and anything scanning are not. PgCache's own
+   `mv_size_ratio` exists to gate materialisation — a subject whose results are
+   never worth materialising has no upside.
+3. *Measure it.* Latency ÷ queries-per-request from a baseline run. This is one
+   number and it settles the question.
+
+**Interaction with C7 (query amplification).** Amplification multiplies
+whichever side is bigger. High amplification over *expensive* queries is the
+best possible case; high amplification over *cheap* ones is the worst, because
+the proxy's per-query overhead is what gets multiplied.
+
+**Origin:** OpenFGA, campaigns r5–r6, 2026-08-03. OpenFGA passed C1, C2, C4, C5
+and C7 cleanly and was still close to a worst case. Measured: the origin served
+each query in **39.5–42.2 µs**, PgCache in **41.9–47.0 µs** — an overhead of
+about 5 µs per query, which is *good* proxy behaviour, multiplied by 104–171
+queries per `Check` into a visible per-request penalty. The whole 84,598-tuple
+dataset fit in a 1 GB `shared_buffers` at a **99.93%** buffer hit rate. We had
+built a read cache in front of a database that was already serving entirely
+from memory.
+
+Evidence: `openFGA/benchmark-docs/08-results-aks-r6.md`,
+`openFGA/benchmark-docs/07-pgcache-configuration.md`.
+
+**Do not fix this by strangling the origin.** Capping the origin's memory to
+manufacture I/O produces a scenario, not a measurement. If a subject needs the
+origin crippled to show a win, the subject is wrong — pick a different one.
+
+### C9b — and the datastore must own a meaningful share of request latency
+
+**Severity:** fatal · **Cost:** one measurement
+
+C9 above catches an origin that is *too fast to beat*. It does not catch the
+opposite failure, which is just as fatal: an application slow enough that the
+datastore is a rounding error in its own request.
+
+A datastore cache can only return the share of latency the datastore actually
+owns. If a request spends 90% of its time in the application's own code, the
+ceiling on any cache placed below it is 10% — before considering hit ratio,
+warm-up, or configuration.
+
+**Test.** Instrument one representative request and report `db_time / wall_time`.
+In Django that is `CaptureQueriesContext` summing `q['time']`; equivalents exist
+in every framework. Do it before any integration work.
+
+**Threshold.** Below ~30% and the subject cannot produce a headline result.
+Between 30% and 60%, proceed and state the ceiling in every report. Above 60% is
+the profile the platform is looking for.
+
+**Measure it on the deployment you will publish.** An in-process test client on a
+virtualised laptop inflates the application side and understates the share. That
+caveat is why the NetBox verdict is "discouraging, one test from settled" rather
+than closed.
+
+**Origin:** NetBox, Probe 0, 2026-08-04. Measured `db_time / wall_time` of
+**3.2%** on the UI prefix list (117 statements, 6 ms of 190 ms) and **27.3%** on
+the API device list (13 statements, 25 ms of 91 ms). PgCache was slower than the
+uncached origin on both, stock and with pinned tables plus a warm cache, at two
+rungs. Evidence: `netbox/RESULTS-probe0.md`.
+
+**The pair, stated together:** openFGA failed C9 because the origin was too fast
+(~40 µs/query, and the datastore was most of the request). NetBox failed C9b
+because the application was too slow (the datastore was 3-27% of the request).
+A subject must clear both to be worth a campaign.

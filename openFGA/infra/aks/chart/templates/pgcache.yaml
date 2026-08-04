@@ -33,6 +33,24 @@ spec:
     spec:
       {{- include "lab.podNetwork" . | nindent 6 }}
       {{- include "lab.placement" (dict "root" . "role" .Values.pgcache.nodeRole) | nindent 6 }}
+      {{- if .Values.pgcache.storage.enabled }}
+      # Volume novo monta pertencendo ao root, e o initdb da imagem roda como
+      # `postgres`: sem este passo ele morre com
+      #   initdb: error: could not create directory "/var/lib/postgresql/data":
+      #   Permission denied
+      # e o pod entra em CrashLoopBackOff. Ajustamos a permissao em vez de fixar
+      # um fsGroup porque o uid da imagem nao esta' documentado, e chutar errado
+      # falha do mesmo jeito. Lab efemero em rede privada.
+      initContainers:
+        - name: fix-store-perms
+          image: busybox:1.36
+          command: [sh, -c, "mkdir -p /mnt/{{ .Values.pgcache.storage.subPath }} && chmod -R 0777 /mnt/{{ .Values.pgcache.storage.subPath }}"]
+          securityContext: {runAsUser: 0}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+          volumeMounts:
+            - {name: store, mountPath: /mnt}
+      {{- end }}
       containers:
         - name: pgcache
           image: {{ .Values.images.pgcache }}
@@ -50,6 +68,12 @@ spec:
             {{- if .Values.pgcache.admissionThreshold }}
             - {name: ADMISSION_THRESHOLD, value: {{ .Values.pgcache.admissionThreshold | quote }}}
             {{- end }}
+            {{- if .Values.pgcache.memoryLimit }}
+            # Sem isto o PgCache mira 80% da RAM que ele DETECTA — dentro do
+            # cgroup, os 32 GiB do no' — e o kubelet o mata por OOM assim que
+            # existir `resources.limits.memory`.
+            - {name: MEMORY_LIMIT, value: {{ .Values.pgcache.memoryLimit | quote }}}
+            {{- end }}
             - {name: PGCACHE_TELEMETRY, value: {{ .Values.pgcache.telemetry | quote }}}
           ports:
             - {containerPort: {{ .Values.pgcache.sqlPort }}, name: sql}
@@ -64,3 +88,36 @@ spec:
             tcpSocket: {port: {{ .Values.pgcache.sqlPort }}}
             periodSeconds: 5
             failureThreshold: 30
+          {{- if .Values.pgcache.storage.enabled }}
+          volumeMounts:
+            - name: store
+              mountPath: {{ .Values.pgcache.storage.mountPath }}
+              subPath: {{ .Values.pgcache.storage.subPath }}
+          {{- end }}
+      {{- if .Values.pgcache.storage.enabled }}
+      volumes:
+        - name: store
+          persistentVolumeClaim: {claimName: pgcache-store}
+      {{- end }}
+{{- if .Values.pgcache.storage.enabled }}
+---
+{{/*
+Disco do store do PgCache, na MESMA StorageClass da origem.
+
+Existe porque, sem ele, o PgCache grava no disco do no' — Premium SSD P15 de
+~1100 IOPS — enquanto a origem le' de um Premium SSD v2 com 8000 IOPS
+provisionados. Enquanto o dataset coube em RAM isso nao apareceu em lugar
+nenhum; a partir do degrau E3 o experimento compara caminhos de disco, e essa
+assimetria decidiria o resultado antes da primeira medicao.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pgcache-store
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.pgcache.storage.className }}
+  resources:
+    requests: {storage: {{ .Values.pgcache.storage.size }}}
+{{- end }}

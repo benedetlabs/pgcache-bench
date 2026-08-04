@@ -245,6 +245,22 @@ data:
     # abaixo sao gates de verdade: falhou, a campanha morre aqui.
     abort() { say "!!!! ABORTANDO A CAMPANHA: $*"; exit 1; }
 
+    # A partir da r8 o experimento DEPENDE de a origem sair da memoria. Sem esta
+    # sonda a campanha nao tem como provar que conseguiu, e ja' erramos assim uma
+    # vez: publicamos nove celulas de "o cache nao ajuda" contra uma origem que
+    # servia 99,93% de buffer hit — um cache competindo com outro cache.
+    #
+    # heap_blks_read alto NAO garante disco: pode ser page cache do SO. Por isso
+    # imprimimos tambem o tamanho real da relacao, para confrontar com o teto de
+    # memoria do pod. Dataset >> limite do cgroup e' o que torna o I/O inevitavel.
+    origin_io_report() {
+      say "-- origem, estado de I/O ($1)"
+      pod "PGPASSWORD=\$PGPASSWORD psql -h \$PGHOST -U \$PGUSER -d \$PGDATABASE -tA -F' | ' \
+        -c \"select 'tamanho', pg_size_pretty(pg_relation_size('tuple')), pg_size_pretty(pg_indexes_size('tuple')), pg_size_pretty(pg_total_relation_size('tuple'))\" \
+        -c \"select 'blocos', heap_blks_read, heap_blks_hit, round(100.0*heap_blks_hit/nullif(heap_blks_hit+heap_blks_read,0),3) from pg_statio_user_tables where relname='tuple'\"" \
+        | sed 's/^/     /'
+    }
+
     seed_rung() {
       local rung=$1 out rc
       say "==== SEED $rung ===="
@@ -252,8 +268,15 @@ data:
       # `results/`, entao o literal `results/$rung/...` funcionava por acidente;
       # com RESULTS=results/<campanha> ele aponta para um arquivo inexistente,
       # STORE sai vazio e a carga de tuplas vai para o store errado.
+      # TRUNCATE, nao DELETE. Cada seed apagava e recarregava a tabela, e o VACUUM
+      # seguinte nao devolve espaco de indice ao sistema de arquivos: os indices da
+      # `tuple` mediam 525 MB tanto com 84.598 linhas quanto com 1.023.498. Os
+      # 556 MB que atribuimos ao degrau E1 eram 23 MB de dado e 525 MB de casca de
+      # uma campanha anterior — e todo raciocinio sobre "o dataset cabe na RAM?"
+      # partia desse numero falso. TRUNCATE recria os arquivos da relacao e dos
+      # indices, entao o tamanho medido passa a ser o tamanho real do degrau.
       out=$(pod "cd /lab && PSQL=\"psql -v ON_ERROR_STOP=1 -h \$PGHOST -U \$PGUSER -d \$PGDATABASE\" && \
-        \$PSQL -c 'DELETE FROM tuple; DELETE FROM changelog; DELETE FROM assertion; DELETE FROM authorization_model; DELETE FROM store;' >/dev/null && \
+        \$PSQL -c 'TRUNCATE tuple, changelog, assertion, authorization_model, store;' >/dev/null && \
         mkdir -p \$RESULTS/$rung && \
         ./bin/fgaseed bootstrap -rung $rung -fga \$FGA_A -model model/model.json -manifest \$RESULTS/$rung/manifest.json && \
         STORE=\$(grep -o '\"store_id\": \"[^\"]*\"' \$RESULTS/$rung/manifest.json | cut -d'\"' -f4) && \
@@ -286,6 +309,8 @@ data:
       # workloads medidos nao tem esse problema porque a concentracao zipf reusa
       # poucas shapes. Concorrencia baixa aqui nao afeta o veredito do gate — ele
       # compara decisoes, nao mede tempo.
+      origin_io_report "$rung apos seed"
+
       say "-- gate de correcao W7 (A vs B, workers=$W7_WORKERS)"
       out=$(pod "cd /lab && ./bin/fgabench -workload w7 -manifest \$RESULTS/$rung/manifest.json \
            -target \$FGA_A -diff-target \$FGA_B -consistency MINIMIZE_LATENCY -workers $W7_WORKERS"); rc=$?
@@ -338,6 +363,9 @@ data:
                 for r in 20 80 160 320; do
                   for p in A B C; do one_run E1 w1 "$p" "ramp$r" zipf "$r"; sleep 5; done
                 done ;;
+        phase6) say "######## FASE 6 — E3 (~11 M tuplas) · origem forcada a I/O ########"
+                seed_rung E3; matrix E3 "w1 w3" zipf "bare-"
+                origin_io_report "E3 apos a matriz" ;;
         *) say "fase desconhecida: $ph" ;;
       esac
     done

@@ -81,6 +81,33 @@ origin:
   # lab tenta isolar. Com um pod por no', o isolamento vem do no'.
   resources:
     requests: {cpu: "6", memory: 20Gi}   # D8as_v5: 32 GiB, ~5 GiB ficam com o kubelet
+    # ── Teto de memoria: como forcar a origem a fazer I/O de verdade ──────────
+    #
+    # Ate' a r7 NENHUM degrau da escada saia da RAM. shared_buffers e' fixo em
+    # 1 GB de proposito, mas o no' tem 32 GiB e a page cache do Linux absorvia o
+    # resto: medimos 99,93% de buffer hit na origem. Comparamos um cache de
+    # leitura contra uma origem que ja' era um cache, e concluimos que o cache
+    # nao ajudava.
+    #
+    # No cgroup v2 a page cache e' cobrada do cgroup que a trouxe, entao um
+    # LIMITE de memoria no pod limita a page cache dele. Com o degrau E3 (~7 GB
+    # reais, depois que o TRUNCATE eliminou o bloat de indice) contra um teto de
+    # 4 GiB, o dataset nao cabe e a leitura vai ao disco — Premium SSD v2 com
+    # 8000 IOPS provisionados, que existe justamente para o disco ser variavel
+    # citavel do experimento.
+    #
+    # ATENCAO — limite de MEMORIA nao e' limite de CPU. O motivo de nunca usarmos
+    # `limits.cpu` e' a cota CFS em janelas de 100 ms, que congela o pod e produz
+    # spike de p99 indistinguivel do custo de um cache miss. Memoria nao tem cota
+    # em janela: ao exceder, o kernel recupera page cache — que e' exatamente o
+    # efeito desejado — e so' mata o processo se a memoria for irrecuperavel. Sao
+    # mecanismos diferentes, e o argumento contra um nao se aplica ao outro.
+    #
+    # PRECISA SER IGUAL AO DO PGCACHE. Limitar so' a origem mediria "qual
+    # processo ganhou mais RAM", nao qual caminho de I/O e' melhor.
+    #
+    # Vazio => sem limite (comportamento de r1..r7).
+    limits: {}
 
 # ── PgCache ─────────────────────────────────────────────────────────────────
 # A imagem embute um PostgreSQL 18 como store de cache: um HIT nao e' leitura de
@@ -122,6 +149,35 @@ pgcache:
   pinnedTables: ""
   admissionThreshold: ""
 
+  # Teto interno do PgCache. O default do produto e' 80% da RAM DETECTADA — e
+  # dentro de um cgroup ele tende a enxergar os 32 GiB do no', nao o limite do
+  # pod. Com `resources.limits` apertado isso significa tentar usar 25 GB dentro
+  # de 4 GiB e morrer por OOM. Quando houver limite no pod, este valor tem que
+  # ser setado explicitamente, abaixo dele. Vazio => default do produto.
+  memoryLimit: ""
+
+  # ── Armazenamento do store do PgCache ──────────────────────────────────────
+  #
+  # A imagem grava o PostgreSQL embutido em /var/lib/postgresql. SEM um volume
+  # isso cai no disco do NO': o userpool usa OS disk `Managed` (Premium SSD P15,
+  # ~1100 IOPS), enquanto a origem tem Premium SSD v2 com 8000 IOPS
+  # PROVISIONADOS. Sete vezes menos.
+  #
+  # Enquanto tudo coube em RAM isso nao apareceu. A partir do degrau E3, com teto
+  # de memoria, o experimento passa a comparar caminhos de disco — e nessa
+  # comparacao o PgCache perderia por causa da infraestrutura que NOS demos a
+  # ele, nao do produto. Seria repetir o D-24 com outra roupa.
+  #
+  # `enabled: false` mantem o comportamento de r1..r7 (disco do no').
+  storage:
+    enabled: false
+    className: origin-premiumv2
+    size: 128Gi
+    # Volume ext4 novo vem com lost+found, e o initdb recusa diretorio nao-vazio.
+    # O subPath resolve criando um nivel abaixo da raiz do volume.
+    subPath: pgdata
+    mountPath: /var/lib/postgresql
+
   workers: 4
   telemetry: "off"        # telemetria anonima e' ruido de rede nao controlado
   sqlPort: 6432
@@ -129,6 +185,10 @@ pgcache:
   nodeRole: pgcache
   resources:
     requests: {cpu: "6", memory: 24Gi}   # D8as_v5: 32 GiB, ~5 GiB ficam com o kubelet
+    # Precisa ser IGUAL ao limite da origem — ver o comentario extenso la'. Com
+    # tetos diferentes o experimento mede quem ganhou mais memoria, nao qual
+    # caminho de I/O e' melhor. Vazio => sem limite.
+    limits: {}
 
 # ── OpenFGA: os tres caminhos ───────────────────────────────────────────────
 openfga:
