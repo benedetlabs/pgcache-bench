@@ -287,6 +287,31 @@ ratio collapsing to 17%. PgCache's own `mv_size_ratio` is the knob that gates
 this; the measurement is what that gate looks like from outside.
 Evidence: `synthetic/RESULTS-probe0.md` §5.
 
+**CORRECTED 2026-08-04 by campaign s2, same day.** The wording above — "cost from
+result size is not bankable" — is too strong, and the AKS sweep falsified it.
+Scan cost **is** bankable: at span=1,000 the origin scans 1,001 rows for 549 µs,
+PgCache serves the aggregate flat at 393 µs, and PgCache **wins by 40% at a 99.1%
+hit ratio**. That is the good case, not the bad one.
+
+What is actually true is a **cliff, not a slope**. PgCache's per-hit cost was flat
+at ~394 µs across span=10, 100 and 1,000 — the rows the origin scanned never
+reach it, because it stores the result. Then at span=10,000 the hit ratio
+collapsed from 99.1% to **16.4%** and the path became **254× worse** than the
+uncached origin. It stops admitting the entry rather than degrading gracefully.
+
+The laptop's 65× was suspected to be Docker Desktop's constrained memory. It is
+not: it reproduces on a 30 GB node, worse.
+
+> A cache banks the origin's scan cost right up to a capacity threshold, and at
+> that threshold it stops admitting rather than degrading. Past it, nearly every
+> query pays the miss path plus proxy overhead. The governing quantity is not the
+> size of the result but the size of the footprint it must be invalidated
+> against — a `sum()` over 10,001 rows returns one row and depends on 10,001.
+
+**Test:** sweep the result size and watch the **hit ratio**, not the latency. The
+latency curve looks smooth right up to the edge. Evidence:
+`synthetic/RESULTS-aks-s2.md` §w5.
+
 ---
 
 ## C10 — The hit ratio must clear the break-even, and break-even is computable
