@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+  external_labels:
+    lab: pgcache-openfga
+
+scrape_configs:
+  - job_name: openfga
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["openfga-a:2112"]
+        labels: { path: "A", path_name: "baseline" }
+      - targets: ["openfga-b:2112"]
+        labels: { path: "B", path_name: "pgcache" }
+      - targets: ["openfga-c:2112"]
+        labels: { path: "C", path_name: "appcache" }
+
+  - job_name: pgcache
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["pgcache:9090"]
+
+  - job_name: postgres-origin
+    static_configs:
+      - targets: ["pgexporter-origin:9187"]
+        labels: { role: "origin" }
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

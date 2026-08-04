@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lab-db
+  labels: {{- include "lab.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: {{ .Values.origin.password | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab-config
+  labels: {{- include "lab.labels" . | nindent 4 }}
+data:
+  # Registro do que foi renderizado. O gerador copia isto para
+  # results/**/versions.txt: sem os parametros do ambiente junto dos numeros, o
+  # resultado nao e' interpretavel seis meses depois.
+  NETWORK_MODE: {{ .Values.networkMode | quote }}
+  ORIGIN_SHARED_BUFFERS: {{ .Values.origin.sharedBuffers | quote }}
+  IMAGE_POSTGRES: {{ .Values.images.postgres | quote }}
+  IMAGE_PGCACHE: {{ .Values.images.pgcache | quote }}
+  IMAGE_OPENFGA: {{ .Values.images.openfga | quote }}
+  PGCACHE_ALLOWED_TABLES: {{ .Values.pgcache.allowedTables | quote }}
+  OPENFGA_MAX_OPEN_CONNS: {{ .Values.openfga.common.maxOpenConns | quote }}
+  OPENFGA_REQUEST_TIMEOUT: {{ .Values.openfga.common.requestTimeout | quote }}
+  OPENFGA_CACHE_TTL: {{ .Values.openfga.common.cacheTtl | quote }}

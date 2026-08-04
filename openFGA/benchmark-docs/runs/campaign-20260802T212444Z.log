@@ -1,0 +1,29 @@
+[21:24:44Z] CAMPANHA INICIADA — namespace pgcache-lab, reps=3, rate=40, dur=60s
+NAME                         READY   STATUS    RESTARTS   AGE    IP            NODE                               NOMINATED NODE   READINESS GATES
+loadgen                      1/1     Running   0          37m    10.224.0.10   aks-userpool-11928609-vmss000004   <none>           <none>
+openfga-a-6ff8668787-4k67m   1/1     Running   0          5m7s   10.224.0.8    aks-userpool-11928609-vmss000002   <none>           <none>
+openfga-b-5c678ddc9f-vdb52   1/1     Running   0          18m    10.224.0.8    aks-userpool-11928609-vmss000002   <none>           <none>
+openfga-c-58cf4cd684-c2rcc   1/1     Running   0          5m7s   10.224.0.8    aks-userpool-11928609-vmss000002   <none>           <none>
+origin-0                     1/1     Running   0          37m    10.224.0.6    aks-userpool-11928609-vmss000000   <none>           <none>
+pgcache-6b4cf7bfbd-bpvsd     1/1     Running   0          18m    10.224.0.9    aks-userpool-11928609-vmss000003   <none>           <none>
+[21:24:46Z] ######## FASE 1 — E1 · networkMode=bare · W1/W2/W3 · 3 reps ########
+[21:24:53Z] ==== SEED E1 ====
+store=01KZ25V4TMCP0MBWRZQTSTR9WR model=01KZ25V4TPD1MEMEA0GANG9AG0 degrau=E1 tuplas_previstas=84598
+emitidas 84598 tuplas para o degrau E1
+COPY 84598
+SEED_OK
+[21:24:57Z] -- validando massa contra o oraculo
+verificacao do degrau E1 (http://openfga-a.pgcache-lab.svc.cluster.local:8080)
+  positivos confirmados: 300   divergentes: 0
+  negativos confirmados: 300   divergentes: 0
+  erros de transporte:   0
+  OK — oraculo e OpenFGA concordam em 100% da amostra.
+[21:25:01Z] -- gate de correcao W7 (A vs B)
+W7 — correcao diferencial (http://openfga-a.pgcache-lab.svc.cluster.local:8080 vs http://openfga-b.pgcache-lab.svc.cluster.local:8090)
+  amostras comparadas : 10
+  concordancia A==B   : 10 (100.000000%)
+  divergencias        : 0
+  A bate com oraculo  : 10 (100.000000%)
+  B bate com oraculo  : 10 (100.000000%)
+  erros de transporte : 3990
+  OK — nenhuma divergencia de decisao.

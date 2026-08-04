@@ -1,0 +1,153 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Strapi × PgCache — R1 / R1b protocol spike
+#
+# Resolves the two BLOCKING questions in strapi/STUDY.md "Open questions and
+# risks" #1 and #2, before any lab artefact is built:
+#
+#   R1  — does PgCache parse the EXTENDED query protocol?
+#         Strapi = knex 3.0.1 + node-postgres 8.20.0 (STUDY §5, "Driver
+#         protocol"). node-postgres has no simple-protocol switch, so if the
+#         answer is no, Strapi is DISQUALIFIED.
+#   R1b — does PgCache SERVE reads from cache inside an explicit BEGIN…COMMIT?
+#         Every Document Service read is wrapped in a real transaction
+#         (STUDY §1, `document-service/common.ts:8-10` → `database/src/index.ts:177-217`).
+#         If no, the cacheable surface collapses to the 5 out-of-transaction
+#         auth statements A1-A4 (STUDY §4, §1 fraction table).
+#
+# Wiring copied from the reference lab `openFGA/docker-compose.yml`
+# (origin flags: lines 69-84; PgCache env: lines 148-165; ports: 93,168).
+#
+# PORTS — deliberately disjoint from every port STUDY §7 reserves for the real
+# lab (1337, 2337, 3337, 5432, 6432, 9090, 9187, 8080, 3000) AND from the
+# openFGA lab's host mappings (15432, 16432, 19090, 19091, 19187, 18080-18100,
+# 21120-21122, 18081, 13001). Container-internal ports follow lab convention
+# (origin 5432, PgCache SQL 6432, PgCache metrics 9090); only the published
+# host ports are shifted, so nothing else on this machine can collide.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: strapi-spike
+
+services:
+
+  # ── Origin Postgres 17 ────────────────────────────────────────────────────
+  # CDC prerequisites are NOT optional: STUDY §5 (`Origin wal_level`) and
+  # risk R1c make `wal_level=logical` + slots + senders the precondition for
+  # path B existing at all. At the Postgres default PgCache cannot open its
+  # slot and the spike would measure "never invalidates" instead of protocol.
+  origin:
+    image: postgres:17
+    container_name: strapi-spike-origin
+    restart: "no"
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c pg_stat_statements.max=10000
+      -c shared_buffers=256MB
+      -c effective_cache_size=512MB
+      -c work_mem=32MB
+      -c max_connections=100
+      -c random_page_cost=1.1
+      -c track_io_timing=on
+      -c log_min_duration_statement=-1
+    environment:
+      POSTGRES_USER: spike
+      POSTGRES_PASSWORD: spikepass
+      POSTGRES_DB: spike
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      # pg_stat_statements + REPLICATION grant. Applied once at cluster init,
+      # mirroring `openFGA/scripts/init-origin.sql`.
+      - ./init-origin.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    ports: ["${SPIKE_PORT_ORIGIN:-15433}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spike -d spike"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # ── PgCache ───────────────────────────────────────────────────────────────
+  # The image embeds a full PostgreSQL 18 as its local cache store; no separate
+  # cache-pg service is needed (openFGA/docker-compose.yml:113-114).
+  pgcache:
+    image: pgcache/pgcache:${PGCACHE_TAG:-0.6.2-a3}
+    container_name: strapi-spike-pgcache
+    restart: "no"
+    depends_on:
+      origin: { condition: service_healthy }
+    cpus: ${SPIKE_PGCACHE_CPUS:-2.0}
+    mem_limit: ${SPIKE_PGCACHE_MEM:-2g}
+    environment:
+      UPSTREAM_URL: "postgres://spike:spikepass@origin:5432/spike"
+      LISTEN_PORT: "6432"
+      METRICS_PORT: "9090"
+      NUM_WORKERS: "${SPIKE_PGCACHE_WORKERS:-2}"
+      # ALLOWED_TABLES must name every table the spike reads. STUDY §5
+      # ("PgCache ALLOWED_TABLES") and risk R1d: an unlisted table is silently
+      # skipped (`pgcache.queries.allowlist_skipped`) and every check would
+      # report 100% miss for a reason that has nothing to do with R1/R1b.
+      ALLOWED_TABLES: "articles,articles_tags_lnk"
+      CACHE_POLICY: "${SPIKE_PGCACHE_POLICY:-clock}"
+      # 1 = cache on first sight. Anything higher would make a short spike
+      # indistinguishable from "cannot cache" (openFGA/docker-compose.yml:157).
+      ADMISSION_THRESHOLD: "1"
+      # DISK_LIMIT is deliberately NOT set. openFGA/docker-compose.yml:158-161:
+      # PgCache compares DISK_LIMIT against TOTAL filesystem usage, not its own
+      # cache, so a "reasonable" value on a busy host makes it judge itself
+      # permanently under disk pressure and refuse EVERY registration —
+      # silently 100% miss. That failure would masquerade as an R1b FAIL.
+      PUBLICATION: "pgcache_spike_pub"
+      SLOT: "pgcache_spike_slot"
+      PGCACHE_TELEMETRY: "off"
+      LOG_LEVEL: "${SPIKE_PGCACHE_LOG_LEVEL:-info}"
+    volumes:
+      - spike-pgcache-data:/var/lib/postgresql
+    ports:
+      - "${SPIKE_PORT_PGCACHE:-16433}:6432"
+      - "${SPIKE_PORT_PGCACHE_METRICS:-19092}:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U spike -d spike || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+  # ── Client ────────────────────────────────────────────────────────────────
+  # node-postgres, NOT psql. STUDY §5: knex parameterizes every query and `pg`
+  # sends parameterized statements via unnamed Parse/Bind/Execute. psql would
+  # exercise the simple protocol — i.e. the wrong wire behaviour entirely.
+  # `pg` is pinned to the exact version in Strapi's yarn.lock (STUDY §5).
+  #
+  # Sources are mounted read-only at /src and copied to /app so `npm install`
+  # never writes node_modules back into the repo.
+  client:
+    image: node:22-alpine
+    container_name: strapi-spike-client
+    restart: "no"
+    depends_on:
+      pgcache: { condition: service_healthy }
+    environment:
+      SPIKE_PGUSER: spike
+      SPIKE_PGPASSWORD: spikepass
+      SPIKE_PGDATABASE: spike
+      SPIKE_ORIGIN_HOST: origin
+      SPIKE_ORIGIN_PORT: "5432"
+      SPIKE_PGCACHE_HOST: pgcache
+      SPIKE_PGCACHE_PORT: "6432"
+      SPIKE_METRICS_URL: "http://pgcache:9090/metrics"
+      SPIKE_WARM_TIMEOUT_MS: "${SPIKE_WARM_TIMEOUT_MS:-30000}"
+      SPIKE_WINDOW_ITERS: "${SPIKE_WINDOW_ITERS:-25}"
+      SPIKE_RESULT_PATH: /out/result.json
+    volumes:
+      - ./client:/src:ro
+      - ./out:/out
+    command:
+      - sh
+      - -c
+      - "mkdir -p /app && cp -a /src/. /app/ && cd /app && npm install --no-audit --no-fund --loglevel=error && node check.js"
+
+volumes:
+  spike-pgcache-data:

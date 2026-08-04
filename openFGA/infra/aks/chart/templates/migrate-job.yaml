@@ -1,0 +1,55 @@
+{{/*
+Migracao do schema do OpenFGA. Equivale ao servico `migrate` do
+docker-compose.yml, que nao tinha sido portado — sem ele os tres OpenFGA sobem e
+ficam em loop de "datastore requires migrations: at revision '0', but requires
+'4'", nunca passando no readiness.
+
+Roda SEMPRE contra a origem, nunca via PgCache: e' DDL, esta' fora de
+ALLOWED_TABLES e nao faz sentido cachear.
+
+restartPolicy OnFailure + backoffLimit alto no lugar de um initContainer que
+espera o Postgres: se a origem ainda nao estiver de pe', o Job tenta de novo.
+Menos peca movel que um laco de pg_isready.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openfga-migrate
+  labels: {{- include "lab.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 30
+  template:
+    metadata:
+      labels:
+        app: openfga-migrate
+        # A label de role e' OBRIGATORIA. A anti-affinity dos pods do lab usa
+        # `operator: NotIn`, e chave AUSENTE satisfaz NotIn — ou seja, um pod sem
+        # esta label e' repelido por todos os pods do lab, em todos os nos, e
+        # fica Pending para sempre. Compartilhar o role do openfga e' o certo:
+        # mesma imagem, execucao curta, e o no' do openfga tem folga.
+        lab.benedet/role: {{ .Values.openfga.nodeRole }}
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- if eq .Values.placement.mode "sharedPool" }}
+      {{- with .Values.placement.sharedPool.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.placement.sharedPool.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- else }}
+      {{- include "lab.placement" (dict "root" . "role" .Values.openfga.nodeRole) | nindent 6 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ .Values.images.openfga }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          args:
+            - migrate
+            - --datastore-engine=postgres
+            - --datastore-uri=postgres://{{ .Values.origin.user }}:{{ .Values.origin.password }}@origin.{{ .Release.Namespace }}.svc.cluster.local:5432/{{ .Values.origin.database }}?sslmode=disable

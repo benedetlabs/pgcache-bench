@@ -1,0 +1,396 @@
+{{- if .Values.campaign.enabled }}
+{{/*
+A campanha rodando DENTRO do cluster.
+
+Por que existe: rodar o campaign-aks.sh a partir de um laptop falhou de tres
+maneiras diferentes — a sessao do terminal encerrou, o Mac dormiu, e o no' Spot
+que hospedava o gerador sumiu. Nenhuma tem a ver com o experimento. Um Job no
+node pool de sistema remove as tres de uma vez.
+
+Fica no pool de SISTEMA, nunca nos nos do lab: ele so' coordena (exec, rollout
+restart) e nao pode competir por CPU com o que esta' sendo medido.
+
+Nao leva a label lab.benedet/role — nao participa da anti-affinity do lab, e o
+nodeSelector ja' o mantem noutro pool.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: campaign-runner
+  labels: {{- include "lab.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: campaign-runner
+  labels: {{- include "lab.labels" . | nindent 4 }}
+rules:
+  # exec no gerador (rodar fgabench/fgaseed)
+  - apiGroups: [""]
+    resources: [pods, pods/log]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+  # rollout restart do PgCache: cache frio a cada repeticao do path B
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, patch, update]
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]
+  # deteccao de contaminacao (Preempted / Evicted / OOMKilled)
+  - apiGroups: ["", events.k8s.io]
+    resources: [events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: campaign-runner
+  labels: {{- include "lab.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: campaign-runner
+subjects:
+  - kind: ServiceAccount
+    name: campaign-runner
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: campaign-script
+  labels: {{- include "lab.labels" . | nindent 4 }}
+data:
+  run.sh: |
+    #!/usr/bin/env bash
+    # Campanha in-cluster. Mesma logica do scripts/campaign-aks.sh, sem as partes
+    # que dependiam do laptop (tar do repositorio local, helm upgrade).
+    #
+    # AS MEDICOES SAO SEQUENCIAIS POR CONSTRUCAO: um path sob carga por vez.
+    # Paralelizar aqui nao acelera nada — corrompe.
+    set -uo pipefail
+    NS="${NS:-pgcache-lab}"
+    CAMPAIGN_ID="${CAMPAIGN_ID:-adhoc}"
+    # Cada campanha escreve num diretorio proprio: sem isso a seguinte sobrescreve
+    # os artefatos da anterior enquanto o all-runs.csv apenas acrescenta (D-18).
+    RESULTS="results/$CAMPAIGN_ID"
+    REPS="${REPS:-3}"; RATE="${RATE:-40}"; DUR="${DUR:-60s}"; WARM="${WARM:-45s}"
+    WORKERS="${WORKERS:-32}"
+    # So' o gate W7 usa concorrencia reduzida; ver o comentario em seed_rung.
+    W7_WORKERS="${W7_WORKERS:-8}"
+    # Teto do aquecimento adaptativo. 0 volta ao comportamento antigo (fixo $WARM).
+    WARM_MAX="${WARM_MAX:-0}"; KNEE_EPS="${KNEE_EPS:-0.01}"
+
+    say() { echo "[$(date -u +%H:%M:%SZ)] $*"; }
+    pod() { kubectl -n "$NS" exec deploy/loadgen -- bash -c "RESULTS=$RESULTS; $1" 2>&1; }
+
+    # Duas fontes de falso positivo, ambas vistas na r5:
+    #
+    #  1. o filtro casava a palavra na MENSAGEM, e todo evento FailedScheduling do
+    #     Kubernetes carrega "Preemption is not helpful for scheduling" no texto.
+    #     Filtramos pela coluna REASON ($3), nao pelo corpo.
+    #  2. nao havia recorte de tempo, entao eventos do deploy — 50 minutos antes da
+    #     primeira medicao — eram reportados apos cada run.
+    #
+    # Um alerta que dispara sempre nao alerta nada: era ele que teria de avisar
+    # sobre uma eviccao Spot de verdade dentro da janela.
+    check_health() {
+      local ev nr
+      ev=$(kubectl -n "$NS" get events --sort-by=.lastTimestamp --no-headers 2>/dev/null \
+            | awk 'tolower($3) ~ /preempt|evict|oomkill|nodenotready/ \
+                   && ($1 ~ /^[0-9]+s$/ || $1 ~ /^[1-4]m/)' | tail -3)
+      [ -n "$ev" ] && { say "!! CONTAMINACAO POSSIVEL apos $1:"; echo "$ev"; }
+      nr=$(kubectl -n "$NS" get pods --no-headers 2>/dev/null | grep -cvE '1/1 *Running|Completed')
+      [ "${nr:-0}" -gt 0 ] && say "!! $nr pod(s) fora de 1/1 Running apos $1"
+      return 0
+    }
+
+    # Cache frio a cada repeticao do path B: sem isto a repeticao 2 herda as
+    # shapes registradas na 1 e mede um aquecimento fora da janela.
+    #
+    # openfga-b REINICIA JUNTO. Reiniciar so' o PgCache deixa o pool de conexoes
+    # do openfga-b apontando para o pod que morreu: ele fica sem datastore e
+    # devolve `healthz -> 500`, e o gerador aborta antes de medir. Custou 7 das
+    # 12 repeticoes do path B na campanha r2.
+    #
+    # A ORDEM IMPORTA e os dois Deployments sao Recreate. Reiniciar os dois de uma
+    # vez faz o openfga-b subir contra um PgCache que ainda nao existe: ele
+    # entra em CrashLoop e o orcamento do healthz acaba antes de ele se recuperar.
+    # PgCache primeiro, pronto, so' entao o openfga-b.
+    cold_pgcache() {
+      kubectl -n "$NS" rollout restart deploy/pgcache >/dev/null 2>&1
+      kubectl -n "$NS" rollout status  deploy/pgcache --timeout=300s >/dev/null 2>&1
+      kubectl -n "$NS" rollout restart deploy/openfga-b >/dev/null 2>&1
+      kubectl -n "$NS" rollout status  deploy/openfga-b --timeout=300s >/dev/null 2>&1
+      # readiness do Deployment nao garante que o pool ja' reconectou; sondamos
+      # o healthz do proprio alvo antes de liberar a run.
+      for i in $(seq 1 30); do
+        code=$(pod "curl -s -o /dev/null -w '%{http_code}' \$FGA_B/healthz" 2>/dev/null | tr -d '\r')
+        [ "$code" = "200" ] && return 0
+        sleep 5
+      done
+      say "!! openfga-b nao ficou saudavel apos reinicio do PgCache (ultimo healthz=$code)"
+      return 0
+    }
+
+    # PgCache PRONTO nao e' PATH B UTILIZAVEL.
+    #
+    # Depois de um restart o cache local esta' vazio e o PgCache registra cada
+    # shape nova varrendo a tabela de origem para dentro dele; a consulta daquela
+    # shape fica represada enquanto isso. Ate' a r3 essa fase passava por acidente:
+    # o cold_pgcache antigo reiniciava os dois Deployments em paralelo e sondava o
+    # healthz por ate' 150 s, e a espera dava tempo do snapshot terminar. Com o
+    # restart sequencial e rapido o amortecedor sumiu e o W7 pegou o PgCache no
+    # meio do registro — todo Check do path B devolveu deadline_exceeded aos 60 s.
+    #
+    # NAO use pgcache_cache_reg_gate_loading como sinal: e' um gauge que VAZA.
+    # Quando o OpenFGA cancela no deadline, o registro e' abandonado e o contador
+    # nao decrementa. Ele ficou preso em 25 com a stack ociosa, enquanto o PgCache
+    # respondia `select count(*) from tuple` em 57 ms.
+    #
+    # O que vale e' o comportamento observavel de ponta a ponta: o PgCache devolve
+    # a contagem certa depressa, E o openfga-b volta a responder healthz. O
+    # segundo importa porque o pool dele (maxOpenConns) fica preso nos Checks que
+    # estouraram, e um openfga-b nao-Ready some do Service headless: sob
+    # networkMode=bare o proprio DNS deixa de resolver.
+    wait_path_b_ready() {
+      local i n code want ok=0
+      want=$(pod "PGPASSWORD=\$PGPASSWORD psql -h \$PGHOST -U \$PGUSER -d \$PGDATABASE -tAc 'select count(*) from tuple'" | tr -dc '0-9')
+      [ -n "$want" ] || abort "nao consegui contar as tuplas na origem"
+      for i in $(seq 1 60); do
+        n=$(pod "timeout 30 env PGPASSWORD=\$PGPASSWORD psql -h pgcache.$NS.svc.cluster.local -p {{ .Values.pgcache.sqlPort }} -U \$PGUSER -d \$PGDATABASE -tAc 'select count(*) from tuple'" | tr -dc '0-9')
+        code=$(pod "curl -s -o /dev/null -w '%{http_code}' --max-time 15 \$FGA_B/healthz" | tr -dc '0-9')
+        if [ "${n:-0}" = "$want" ] && [ "${code:-0}" = "200" ]; then
+          # UMA sondagem boa nao basta. Na r5 o gate passou e o fgabench, poucos
+          # segundos depois, morreu no proprio preflight com `no such host` para
+          # openfga-b — cinco vezes, sempre a mesma assinatura. Sob networkMode
+          # bare o Service e' headless: cada restart do openfga-b tira o endpoint,
+          # o CoreDNS cacheia a negativa, e o nome volta a falhar por uma janela
+          # que a sondagem unica atravessa por sorte. Exigimos tres acertos
+          # seguidos, espacados, cada um num processo novo.
+          ok=$((ok + 1))
+          if [ "$ok" -ge 3 ]; then
+            say "-- path B pronto (PgCache devolve $n tuplas, openfga-b healthz=200, $i tentativas)"
+            return 0
+          fi
+          sleep 5
+          continue
+        fi
+        ok=0
+        # Pool preso nos Checks que estouraram nao se recupera sozinho; um
+        # openfga-b reciclado reconecta a um PgCache que ja' esta' respondendo.
+        if [ $((i % 12)) -eq 0 ] && [ "${code:-0}" != "200" ]; then
+          say "-- openfga-b sem healthz apos $((i*10))s; reciclando"
+          kubectl -n "$NS" rollout restart deploy/openfga-b >/dev/null 2>&1
+          kubectl -n "$NS" rollout status  deploy/openfga-b --timeout=300s >/dev/null 2>&1
+        fi
+        sleep 10
+      done
+      abort "path B nao ficou utilizavel: PgCache='${n:-?}' esperado='$want' healthz='${code:-?}'"
+    }
+
+    one_run() {
+      local rung=$1 wl=$2 p=$3 runid=$4 dist=${5:-zipf} rate=${6:-$RATE}
+      local t m pg
+      case "$p" in
+        A) t='$FGA_A'; m='$FGA_A_METRICS'; pg='' ;;
+        B) t='$FGA_B'; m='$FGA_B_METRICS'; pg='-pgcache-metrics $PGCACHE_METRICS' ;;
+        C) t='$FGA_C'; m='$FGA_C_METRICS'; pg='' ;;
+      esac
+      # O path B mede a partir de cache frio, mas a janela precisa comecar de um
+      # estado definido: sem o gate abaixo o aquecimento do gerador disputa com o
+      # registro inicial de shapes e parte da janela mede o snapshot, nao o cache.
+      [ "$p" = B ] && { cold_pgcache; wait_path_b_ready; }
+      # run_id GLOBALMENTE UNICO. Rotulos como `bare-r1` reiniciavam a cada
+      # campanha sobre um volume nao limpo: os diretorios de artefato eram
+      # sobrescritos e o all-runs.csv acumulava linhas de campanhas diferentes
+      # sob o mesmo rotulo, indistinguiveis. Defeito D-18.
+      local uid="$CAMPAIGN_ID-$runid"
+      say "--- $rung/$wl/$p run=$uid dist=$dist rate=$rate"
+      # UMA retentativa. Um tropeco de infraestrutura antes da janela abrir — o
+      # preflight do gerador nao resolver o nome do alvo, por exemplo — nao mede
+      # nada e nao contamina nada; perder a celula inteira da matriz por causa
+      # dele e' que e' caro. Na r5 foi exatamente isso: 5 das 57 execucoes se
+      # perderam assim, todas do path B, e as condicoes ficaram sem comparacao.
+      # Nao ha' risco de a retentativa mascarar um defeito real: se o alvo estiver
+      # de fato quebrado, a segunda tambem falha e a lacuna aparece no relatorio.
+      local rc
+      for attempt in 1 2; do
+        # -warmup-max liga o aquecimento adaptativo: aquece em fatias de $WARM ate'
+        # o hit ratio da fatia estabilizar, em vez de parar num prazo fixo. So'
+        # tem efeito no path B, que e' o unico com metricas de PgCache; A e C caem
+        # no caminho fixo sozinhos. Ate' a r5 a flag nunca era passada e todas as
+        # runs mediram com 45 s de aquecimento — o joelho medido depois estava em
+        # 2m30, ou seja, mediamos cache em formacao e chamamos de PgCache (D-24).
+        pod "cd /lab && ./bin/fgabench -target $t -manifest \$RESULTS/$rung/manifest.json \
+             -workload $wl -rate $rate -duration $DUR -warmup $WARM -path $p \
+             -warmup-max $WARM_MAX -warmup-knee-eps $KNEE_EPS \
+             -run-id $uid -campaign-id $CAMPAIGN_ID -out \$RESULTS -fga-metrics $m $pg \
+             -workers $WORKERS -doc-dist $dist"
+        rc=$?
+        [ $rc -eq 0 ] && break
+        [ $attempt -eq 2 ] && { say "!! $rung/$wl/$p run=$uid falhou nas duas tentativas"; break; }
+        say "!! $rung/$wl/$p run=$uid falhou (rc=$rc); reavaliando o alvo e repetindo"
+        [ "$p" = B ] && wait_path_b_ready
+        sleep 10
+      done
+      check_health "$rung/$wl/$p/$runid"
+    }
+
+    # Um degrau mal semeado envenena TODAS as medicoes que vierem depois dele, e
+    # o defeito so' aparece na analise, horas depois. Por isso as tres etapas
+    # abaixo sao gates de verdade: falhou, a campanha morre aqui.
+    abort() { say "!!!! ABORTANDO A CAMPANHA: $*"; exit 1; }
+
+    seed_rung() {
+      local rung=$1 out rc
+      say "==== SEED $rung ===="
+      # O manifesto e' relido pelo caminho COMPLETO. Antes do D-18 RESULTS era
+      # `results/`, entao o literal `results/$rung/...` funcionava por acidente;
+      # com RESULTS=results/<campanha> ele aponta para um arquivo inexistente,
+      # STORE sai vazio e a carga de tuplas vai para o store errado.
+      out=$(pod "cd /lab && PSQL=\"psql -v ON_ERROR_STOP=1 -h \$PGHOST -U \$PGUSER -d \$PGDATABASE\" && \
+        \$PSQL -c 'DELETE FROM tuple; DELETE FROM changelog; DELETE FROM assertion; DELETE FROM authorization_model; DELETE FROM store;' >/dev/null && \
+        mkdir -p \$RESULTS/$rung && \
+        ./bin/fgaseed bootstrap -rung $rung -fga \$FGA_A -model model/model.json -manifest \$RESULTS/$rung/manifest.json && \
+        STORE=\$(grep -o '\"store_id\": \"[^\"]*\"' \$RESULTS/$rung/manifest.json | cut -d'\"' -f4) && \
+        [ -n \"\$STORE\" ] && \
+        ./bin/fgaseed tuples -rung $rung -store \$STORE | \$PSQL -c '\copy tuple(store,object_type,object_id,relation,_user,user_type,ulid,inserted_at,condition_name,condition_context) FROM STDIN' && \
+        \$PSQL -c 'VACUUM (ANALYZE) tuple;' >/dev/null && echo SEED_OK")
+      echo "$out" | tail -5
+      echo "$out" | grep -q SEED_OK || abort "seed de $rung falhou"
+
+      # O PgCache precisa comecar vazio depois de uma carga em massa: sem isto ele
+      # serve a massa ANTERIOR e todo Check pelo path B estoura o deadline.
+      # cold_pgcache ja' reinicia o openfga-b junto e sonda o healthz.
+      say "-- PgCache e openfga-b frios pos-seed"
+      cold_pgcache
+      wait_path_b_ready
+
+      # fgaseed verify sai com 1 se oraculo e OpenFGA discordarem (main.go:297).
+      say "-- massa vs oraculo"
+      out=$(pod "cd /lab && ./bin/fgaseed verify -manifest \$RESULTS/$rung/manifest.json -fga \$FGA_A -samples 300"); rc=$?
+      echo "$out" | tail -4
+      [ $rc -eq 0 ] || abort "a massa de $rung nao bate com o oraculo"
+
+      # fgabench w7 sai com 1 se A e B discordarem (main.go:665). Antes a saida ia
+      # direto para `tail`, que engolia o codigo: o gate imprimia a divergencia e
+      # a campanha seguia medindo em cima dela.
+      # W7 percorre 4.000 pares distintos, ou seja 4.000 shapes distintas, e e' o
+      # unico ponto da campanha que faz isso contra um PgCache recem-reiniciado.
+      # A 32 workers sao ate' 32 registros concorrentes, cada um varrendo a tabela:
+      # o PgCache satura e TODAS as consultas estouram o deadline de 60 s. Os
+      # workloads medidos nao tem esse problema porque a concentracao zipf reusa
+      # poucas shapes. Concorrencia baixa aqui nao afeta o veredito do gate — ele
+      # compara decisoes, nao mede tempo.
+      say "-- gate de correcao W7 (A vs B, workers=$W7_WORKERS)"
+      out=$(pod "cd /lab && ./bin/fgabench -workload w7 -manifest \$RESULTS/$rung/manifest.json \
+           -target \$FGA_A -diff-target \$FGA_B -consistency MINIMIZE_LATENCY -workers $W7_WORKERS"); rc=$?
+      echo "$out" | tail -7
+      [ $rc -eq 0 ] || abort "gate W7 reprovou em $rung — o PgCache divergiu da origem"
+    }
+
+    # Fases 2 e 5 reaproveitam a massa da fase 1 de proposito — resemear entre
+    # elas trocaria o dataset no meio do controle. Mas isso so' vale se a fase 1
+    # rodou nesta campanha: sem o manifesto o gerador mede contra um store que
+    # nao existe e devolve zeros com cara de resultado.
+    need_manifest() {
+      pod "test -f \$RESULTS/$1/manifest.json" >/dev/null 2>&1 \
+        || abort "fase pediu $1 mas $RESULTS/$1/manifest.json nao existe — rode phase1 (ou phase4) na mesma campanha"
+    }
+
+    matrix() {
+      local rung=$1 wls=$2 dist=$3 sfx=$4
+      for rep in $(seq 1 "$REPS"); do
+        for wl in $wls; do
+          for p in A B C; do one_run "$rung" "$wl" "$p" "${sfx}r${rep}" "$dist"; sleep 5; done
+        done
+      done
+    }
+
+    say "CAMPANHA IN-CLUSTER — id=$CAMPAIGN_ID ns=$NS fases='$PHASES' reps=$REPS rate=$RATE dur=$DUR"
+    say "resultados em /lab/$RESULTS"
+    kubectl -n "$NS" get pods -o wide
+
+    # `kubectl exec deploy/loadgen` escolhe um pod mesmo nao-pronto. O gerador so'
+    # fica pronto depois de instalar o cliente Postgres, e sem ele o seed morre
+    # com exit 127 no meio da fase 1 — foi o fim da campanha 4.
+    kubectl -n "$NS" wait --for=condition=ready pod -l app=loadgen --timeout=600s \
+      || abort "o gerador nao ficou pronto"
+    for d in origin pgcache openfga-a openfga-b openfga-c; do
+      kubectl -n "$NS" wait --for=condition=ready pod -l app=$d --timeout=600s >/dev/null 2>&1 \
+        || say "!! $d nao reportou ready; seguindo, os gates de seed vao pegar se estiver quebrado"
+    done
+
+    for ph in $PHASES; do
+      case "$ph" in
+        phase1) say "######## FASE 1 — E1 · W1/W2/W3 · $REPS reps ########"
+                seed_rung E1; matrix E1 "w1 w2 w3" zipf "bare-" ;;
+        phase2) say "######## FASE 2 — E1 · doc-dist=uniform (controle) ########"
+                need_manifest E1; matrix E1 "w1 w3" uniform "unif-" ;;
+        phase4) say "######## FASE 4 — E2 (1,0 M tuplas) ########"
+                seed_rung E2; matrix E2 "w1 w3" zipf "bare-" ;;
+        phase5) say "######## FASE 5 — rampa de taxa (E1, W1) ########"
+                need_manifest E1
+                for r in 20 80 160 320; do
+                  for p in A B C; do one_run E1 w1 "$p" "ramp$r" zipf "$r"; sleep 5; done
+                done ;;
+        *) say "fase desconhecida: $ph" ;;
+      esac
+    done
+
+    say "==== CAMPANHA CONCLUIDA ===="
+    say "Resultados no PVC do gerador. Extraia com:"
+    say "  kubectl -n $NS cp \$(kubectl -n $NS get pod -l app=loadgen -o jsonpath='{.items[0].metadata.name}'):/lab/$RESULTS ./results-$CAMPAIGN_ID"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: campaign-{{ .Values.campaign.id }}
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  # Uma tentativa apenas: reexecucao automatica sujaria os dados e a analise
+  # precisa saber exatamente o que rodou.
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        app: campaign-runner
+        lab.benedet/role: {{ .Values.loadgen.nodeRole }}
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: campaign-runner
+      restartPolicy: Never
+      # O runner nao mede nada: so' chama kubectl. Fica junto do gerador, que e'
+      # quem ele dirige. A label de role e' obrigatoria — a anti-affinity do lab
+      # usa `NotIn`, e chave ausente satisfaz NotIn, entao um pod sem ela e'
+      # repelido de todos os nos (foi o que travou o Job de migracao, D-13).
+      {{- include "lab.placement" (dict "root" . "role" .Values.loadgen.nodeRole) | nindent 6 }}
+      containers:
+        - name: runner
+          # traz kubectl e as ferramentas de shell que o script usa
+          image: {{ .Values.campaign.image }}
+          command: [/bin/bash, /campaign/run.sh]
+          env:
+            - {name: NS, value: {{ .Release.Namespace | quote }}}
+            - {name: CAMPAIGN_ID, value: {{ .Values.campaign.id | quote }}}
+            - {name: PHASES, value: {{ .Values.campaign.phases | quote }}}
+            - {name: REPS, value: {{ .Values.campaign.reps | quote }}}
+            - {name: RATE, value: {{ .Values.campaign.rate | quote }}}
+            - {name: DUR, value: {{ .Values.campaign.duration | quote }}}
+            - {name: WARM_MAX, value: {{ .Values.campaign.warmupMax | quote }}}
+            - {name: KNEE_EPS, value: {{ .Values.campaign.warmupKneeEps | quote }}}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+          volumeMounts:
+            - {name: script, mountPath: /campaign}
+      volumes:
+        - name: script
+          configMap:
+            name: campaign-script
+            defaultMode: 0755
+{{- end }}

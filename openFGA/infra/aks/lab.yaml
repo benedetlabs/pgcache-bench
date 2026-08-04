@@ -1,0 +1,380 @@
+# Lab PgCache x OpenFGA no AKS.
+#
+#   kubectl apply -f lab.yaml
+#
+# ── As tres decisoes que fazem isto ser plataforma de medicao valida ─────────
+#
+# 1. UM POD POR NO. Cada componente tem node pool proprio, com taint e
+#    nodeSelector. O SKU da VM vira o envelope de recurso, no lugar do cpus/
+#    mem_limit do docker-compose.
+#
+# 2. SEM `limits` DE CPU, so' `requests`. Limite de CPU vira cota CFS em janelas
+#    de 100 ms; pod que estoura fica congelado ate' a janela virar, e isso aparece
+#    como spike de p99 — indistinguivel da assinatura de registro de shape do
+#    PgCache que o lab justamente tenta isolar. O kubelet ja' sobe com
+#    cpuCfsQuota=false (ver cluster.sh) e aqui nao pedimos cota nenhuma.
+#
+# 3. `hostNetwork: true` + Services HEADLESS (clusterIP: None). O DNS resolve
+#    direto para o IP do pod, que com hostNetwork e' o IP do no'. Zero kube-proxy,
+#    zero NAT, zero overlay no caminho de dados.
+#
+# ── Os dois modos de medicao ────────────────────────────────────────────────
+#
+# O acima e' o modo "bare": mede como se fossem VMs. Para o modo "cni" — que mede
+# a SUA topologia de producao — remova `hostNetwork: true` dos pods e troque
+# `clusterIP: None` por ClusterIP normal nos Services.
+#
+# A DIFERENCA ENTRE OS DOIS E' O CUSTO DA CAMADA DE REDE DO KUBERNETES, com tudo
+# mais identico. Esse numero e' publicavel por si so' — e e' o que o lab em VM
+# nao consegue produzir.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pgcache-lab
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab-config
+  namespace: pgcache-lab
+data:
+  # shared_buffers FIXO em 1 GB em todos os degraus. Sem esse controle a escada
+  # mede "quanta RAM eu dei ao Postgres", nao escalabilidade. PLAN.md secao 4.
+  ORIGIN_SHARED_BUFFERS: "1GB"
+  # Exclui `changelog` do cache: e' a unica leitura volatil do OpenFGA, porque a
+  # query de ReadChanges interpola NOW() como texto literal. PLAN.md secao 1.
+  PGCACHE_ALLOWED_TABLES: "tuple,authorization_model"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lab-db
+  namespace: pgcache-lab
+stringData:
+  # Lab efemero em rede privada. Se o cluster for exposto, troque por
+  # Workload Identity + Key Vault.
+  POSTGRES_PASSWORD: fgapass
+---
+# ── Origem ──────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: origin-data
+  namespace: pgcache-lab
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: origin-premiumv2
+  resources:
+    requests:
+      storage: 256Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: origin
+  namespace: pgcache-lab
+spec:
+  clusterIP: None          # headless: resolve direto para o IP do no'
+  selector: {app: origin}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: origin
+  namespace: pgcache-lab
+spec:
+  serviceName: origin
+  replicas: 1
+  selector: {matchLabels: {app: origin}}
+  template:
+    metadata:
+      labels: {app: origin}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {role: origin}
+      tolerations: [{key: role, value: origin, effect: NoSchedule}]
+      containers:
+        - name: postgres
+          image: postgres:17
+          args:
+            - postgres
+            - -c
+            - wal_level=logical
+            - -c
+            - max_wal_senders=10
+            - -c
+            - max_replication_slots=10
+            - -c
+            - shared_preload_libraries=pg_stat_statements
+            - -c
+            - pg_stat_statements.track=all
+            - -c
+            - shared_buffers=$(ORIGIN_SHARED_BUFFERS)
+            - -c
+            - max_connections=400
+            - -c
+            - track_io_timing=on
+          env:
+            - {name: POSTGRES_USER, value: fga}
+            - {name: POSTGRES_DB, value: openfga}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-db, key: POSTGRES_PASSWORD}}
+            - name: ORIGIN_SHARED_BUFFERS
+              valueFrom: {configMapKeyRef: {name: lab-config, key: ORIGIN_SHARED_BUFFERS}}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          # requests apenas. Sem limits => sem cota CFS => sem throttling.
+          resources:
+            requests: {cpu: "6", memory: 20Gi}   # D8ds_v6 tem 32 GiB; ~5 GiB ficam com o kubelet
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          readinessProbe:
+            exec: {command: [pg_isready, -U, fga, -d, openfga]}
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: origin-data}
+---
+# ── PgCache ─────────────────────────────────────────────────────────────────
+# A imagem embute um PostgreSQL 18 como store de cache: um HIT nao e' leitura de
+# memoria, e' consulta SQL completa a esse banco local. Por isso serie E, e por
+# isso ele e' o servico mais faminto do lab — pico de 4,41 GiB ja' em E1, com
+# apenas 85 K tuplas.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgcache
+  namespace: pgcache-lab
+spec:
+  clusterIP: None
+  selector: {app: pgcache}
+  ports:
+    - {name: sql, port: 6432, targetPort: 6432}
+    - {name: metrics, port: 9090, targetPort: 9090}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgcache
+  namespace: pgcache-lab
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pgcache}}
+  template:
+    metadata:
+      labels: {app: pgcache}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {role: pgcache}
+      tolerations: [{key: role, value: pgcache, effect: NoSchedule}]
+      containers:
+        - name: pgcache
+          image: pgcache/pgcache:latest   # FIXE um digest antes de publicar numero
+          env:
+            - name: UPSTREAM_URL
+              value: postgres://fga:fgapass@origin.pgcache-lab.svc.cluster.local:5432/openfga
+            - {name: LISTEN_PORT, value: "6432"}
+            - {name: METRICS_PORT, value: "9090"}
+            - {name: NUM_WORKERS, value: "4"}
+            - name: ALLOWED_TABLES
+              valueFrom: {configMapKeyRef: {name: lab-config, key: PGCACHE_ALLOWED_TABLES}}
+            # Telemetria anonima e' ruido de rede nao controlado.
+            - {name: PGCACHE_TELEMETRY, value: "off"}
+          resources:
+            requests: {cpu: "6", memory: 48Gi}
+---
+# ── OpenFGA: os tres caminhos ───────────────────────────────────────────────
+# A, B e C dividem o MESMO no'. Nao ha' contencao porque a regra de ouro e' um
+# path sob carga por vez (PLAN.md secao 8.1) — os outros dois ficam ociosos.
+#
+# Flags que sao controle experimental, nao gosto:
+#   --experimentals=            NAO e' vazio por default; vem ["pipeline_list_objects"]
+#   --request-timeout=60s       o default de 3 s faz run saturada medir timeout
+#   --datastore-max-open-conns  teto real de concorrencia, igual nos tres
+apiVersion: v1
+kind: Service
+metadata:
+  name: openfga-a
+  namespace: pgcache-lab
+spec:
+  clusterIP: None
+  selector: {app: openfga-a}
+  ports:
+    - {name: http, port: 8080, targetPort: 8080}
+    - {name: metrics, port: 2112, targetPort: 2112}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openfga-a          # baseline: origem direta, caches OFF
+  namespace: pgcache-lab
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: openfga-a}}
+  template:
+    metadata:
+      labels: {app: openfga-a}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {role: openfga}
+      tolerations: [{key: role, value: openfga, effect: NoSchedule}]
+      containers:
+        - name: openfga
+          image: openfga/openfga:latest   # FIXE um digest antes de publicar numero
+          args:
+            - run
+            - --datastore-engine=postgres
+            - --datastore-uri=postgres://fga:fgapass@origin.pgcache-lab.svc.cluster.local:5432/openfga?sslmode=disable
+            - --datastore-max-open-conns=30
+            - --request-timeout=60s
+            - --experimentals=
+            - --check-query-cache-enabled=false
+            - --check-iterator-cache-enabled=false
+            - --cache-controller-enabled=false
+            - --metrics-enable-rpc-histograms
+            - --datastore-metrics-enabled
+            - --http-addr=0.0.0.0:8080
+            - --metrics-addr=0.0.0.0:2112
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openfga-b
+  namespace: pgcache-lab
+spec:
+  clusterIP: None
+  selector: {app: openfga-b}
+  ports:
+    - {name: http, port: 8090, targetPort: 8090}
+    - {name: metrics, port: 2113, targetPort: 2113}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openfga-b          # pgcache: via proxy, caches OFF
+  namespace: pgcache-lab
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: openfga-b}}
+  template:
+    metadata:
+      labels: {app: openfga-b}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {role: openfga}
+      tolerations: [{key: role, value: openfga, effect: NoSchedule}]
+      containers:
+        - name: openfga
+          image: openfga/openfga:latest
+          args:
+            - run
+            - --datastore-engine=postgres
+            # simple_protocol: sem ele o PgCache classifica ~99,97% como
+            # nao-cacheavel. Com ele os literais sao interpolados no texto do SQL
+            # e o espaco de shapes cresce com o produto cartesiano da massa.
+            # E' um CONFUNDIMENTO conhecido: o path B nao e' "o path A mais um
+            # cache", e sim "o path A sem prepared statements, mais um cache".
+            - --datastore-uri=postgres://fga:fgapass@pgcache.pgcache-lab.svc.cluster.local:6432/openfga?sslmode=disable&default_query_exec_mode=simple_protocol
+            - --datastore-max-open-conns=30
+            - --request-timeout=60s
+            - --experimentals=
+            - --check-query-cache-enabled=false
+            - --check-iterator-cache-enabled=false
+            - --cache-controller-enabled=false
+            - --metrics-enable-rpc-histograms
+            - --datastore-metrics-enabled
+            - --http-addr=0.0.0.0:8090
+            - --metrics-addr=0.0.0.0:2113
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openfga-c
+  namespace: pgcache-lab
+spec:
+  clusterIP: None
+  selector: {app: openfga-c}
+  ports:
+    - {name: http, port: 8100, targetPort: 8100}
+    - {name: metrics, port: 2114, targetPort: 2114}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openfga-c          # appcache: o competidor honesto, caches ON (TTL 10 s)
+  namespace: pgcache-lab
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: openfga-c}}
+  template:
+    metadata:
+      labels: {app: openfga-c}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {role: openfga}
+      tolerations: [{key: role, value: openfga, effect: NoSchedule}]
+      containers:
+        - name: openfga
+          image: openfga/openfga:latest
+          args:
+            - run
+            - --datastore-engine=postgres
+            - --datastore-uri=postgres://fga:fgapass@origin.pgcache-lab.svc.cluster.local:5432/openfga?sslmode=disable
+            - --datastore-max-open-conns=30
+            - --request-timeout=60s
+            - --experimentals=
+            - --check-query-cache-enabled=true
+            - --check-iterator-cache-enabled=true
+            - --cache-controller-enabled=true
+            - --check-query-cache-ttl=10s
+            - --metrics-enable-rpc-histograms
+            - --datastore-metrics-enabled
+            - --http-addr=0.0.0.0:8100
+            - --metrics-addr=0.0.0.0:2114
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+---
+# ── Gerador ─────────────────────────────────────────────────────────────────
+# Pod de trabalho, nao Job: voce entra com `kubectl exec` e roda seed/suite a mao,
+# como no runbook. Job com o benchmark embutido acopla o ciclo de vida do
+# experimento ao do objeto Kubernetes, e uma run abortada vira CrashLoop.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: loadgen
+  namespace: pgcache-lab
+  labels: {app: loadgen}
+spec:
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+  nodeSelector: {role: loadgen}
+  tolerations: [{key: role, value: loadgen, effect: NoSchedule}]
+  restartPolicy: Never
+  containers:
+    - name: bench
+      image: golang:1.24
+      command: [sleep, infinity]
+      workingDir: /lab
+      env:
+        - {name: FGA_A, value: "http://openfga-a.pgcache-lab.svc.cluster.local:8080"}
+        - {name: FGA_B, value: "http://openfga-b.pgcache-lab.svc.cluster.local:8090"}
+        - {name: FGA_C, value: "http://openfga-c.pgcache-lab.svc.cluster.local:8100"}
+        - {name: PGHOST, value: "origin.pgcache-lab.svc.cluster.local"}
+        - {name: PGCACHE_METRICS, value: "http://pgcache.pgcache-lab.svc.cluster.local:9090/metrics"}
+      resources:
+        requests: {cpu: "3", memory: 8Gi}
+      volumeMounts:
+        - {name: lab, mountPath: /lab}
+  volumes:
+    - name: lab
+      emptyDir: {}       # copie results/ com `kubectl cp` ANTES do teardown

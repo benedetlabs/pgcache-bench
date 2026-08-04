@@ -1,0 +1,244 @@
+# ── O interruptor mais importante do chart ──────────────────────────────────
+#
+#   bare  hostNetwork + Service headless. O DNS resolve direto para o IP do no',
+#         entao nao ha' kube-proxy, NAT nem overlay no caminho de dados. Mede
+#         como se fossem VMs.
+#   cni   rede de pod normal + ClusterIP. Mede a SUA topologia de producao.
+#
+# A DIFERENCA ENTRE OS DOIS, com massa/taxa/SKU identicos, E' O CUSTO DA CAMADA
+# DE REDE DO KUBERNETES sobre uma carga de 124-480 consultas por requisicao.
+# Esse numero e' resultado publicavel por si so'.
+#
+# Se o cluster tiver Azure Policy ou Pod Security Standards barrando hostNetwork,
+# `bare` falha no admission e voce cai em `cni` — legitimo, mas precisa constar
+# no relatorio, porque deixa de ser comparavel com o lab local.
+networkMode: bare
+
+# ── Colocacao ───────────────────────────────────────────────────────────────
+#
+# O requisito nao e' "um node pool por componente", e' UM POD POR NO.
+#
+#   sharedPool     (default) reaproveita o `userpool` que ja' existe no eks-1:
+#                  Standard_D8as_v5 (8 vCPU / 32 GiB), autoscale 0-5, Spot.
+#                  A separacao vem de anti-affinity entre roles, e o cluster
+#                  autoscaler sobe os nos necessarios. Quatro roles => 4 nos,
+#                  sobra 1. Fora das campanhas o pool desce a 0 e nao custa nada.
+#
+#   dedicatedPools um node pool por componente (cluster.sh pools). Use quando os
+#                  componentes precisarem de SKUs diferentes.
+#
+# ATENCAO — o userpool e' SPOT com eviccao Deallocate. Uma eviccao no meio de uma
+# janela invalida a run, do mesmo jeito que o reinicio do PgCache zerou os
+# contadores no lab local. Depois de cada suite:
+#   kubectl -n pgcache-lab get events | grep -i 'preempt\|evict'
+# Achou dentro da janela? Descarte e refaca aquela repeticao.
+placement:
+  mode: sharedPool
+  sharedPool:
+    nodeSelector:
+      agentpool: userpool
+    tolerations:
+      - key: kubernetes.azure.com/scalesetpriority
+        operator: Equal
+        value: spot
+        effect: NoSchedule
+
+# ── Imagens ─────────────────────────────────────────────────────────────────
+# `latest` nao identifica build. FIXE OS DIGESTS antes de publicar qualquer
+# numero — o versions.txt do lab existe justamente para registrar isso.
+images:
+  postgres: postgres:17
+  pgcache: pgcache/pgcache:latest
+  openfga: openfga/openfga:latest
+  loadgen: golang:1.24
+  pullPolicy: IfNotPresent
+
+# ── Origem ──────────────────────────────────────────────────────────────────
+origin:
+  # FIXO em 1 GB em todos os degraus. Sem esse controle a escada mede "quanta
+  # RAM eu dei ao Postgres", nao escalabilidade. PLAN.md secao 4.
+  sharedBuffers: 1GB
+  maxConnections: 400
+  user: fga
+  database: openfga
+  # Lab efemero em rede privada. Cluster exposto -> Workload Identity + Key Vault.
+  password: fgapass
+  storage:
+    # Criada por cluster.sh. Premium SSD v2 com IOPS provisionado explicito: em E3
+    # a origem vira I/O bound por desenho, entao o disco e' variavel do
+    # experimento e o numero precisa ser citavel no relatorio.
+    className: origin-premiumv2
+    size: 256Gi
+    # A StorageClass e' criada pelo proprio chart (templates/storageclass.yaml).
+    # Ponha false para reusar uma existente do cluster.
+    create: true
+    iops: 8000
+    mbps: 400
+  nodeRole: origin
+  # requests apenas, SEM limits. Limite de CPU vira cota CFS em janelas de 100 ms;
+  # pod que estoura fica congelado ate' a janela virar, e isso aparece como spike
+  # de p99 — indistinguivel da assinatura de registro de shape do PgCache que o
+  # lab tenta isolar. Com um pod por no', o isolamento vem do no'.
+  resources:
+    requests: {cpu: "6", memory: 20Gi}   # D8as_v5: 32 GiB, ~5 GiB ficam com o kubelet
+
+# ── PgCache ─────────────────────────────────────────────────────────────────
+# A imagem embute um PostgreSQL 18 como store de cache: um HIT nao e' leitura de
+# memoria, e' consulta SQL completa a esse banco local. Por isso serie E — pico
+# medido de 4,41 GiB ja' em E1, com apenas 85 K tuplas.
+pgcache:
+  # Exclui `changelog`: e' a unica leitura volatil do OpenFGA, porque a query de
+  # ReadChanges interpola NOW() como texto literal. PLAN.md secao 1.
+  allowedTables: "tuple,authorization_model"
+
+  # ── Botoes que ate' a campanha r5 nunca foram tocados ──────────────────────
+  #
+  # Ate' aqui medimos o PgCache na configuracao PADRAO e chamamos o resultado de
+  # "PgCache". A documentacao do produto (pgcache.com/docs) descreve dois botoes
+  # que atacam exatamente as fraquezas que o nosso workload expoe, e nenhum dos
+  # dois estava sendo exercitado. Rodar assim e' a mesma injustica que seria medir
+  # o path C com o cache do OpenFGA desligado.
+  #
+  # pinnedTables  Cada entrada vira `SELECT * FROM {tabela}`, pre-carregada e
+  #               protegida de eviccao. A doc: "single-table pinned queries with
+  #               no joins or subqueries are always kept up to date via CDC — they
+  #               are updated in place and never invalidated". O nosso caso e'
+  #               literalmente esse: toda leitura do OpenFGA e' de tabela unica,
+  #               sem join. E `authorization_model` e' dado de referencia puro —
+  #               lido em toda requisicao, escrito quase nunca.
+  #               Vazio => desligado (o template omite a variavel).
+  #
+  # admissionThreshold  Quantas vezes uma query precisa aparecer antes de entrar
+  #               no cache. Default do produto e' 1, isto e', admite na PRIMEIRA
+  #               ocorrencia. Subir mantem query de uso unico fora do cache ao
+  #               custo de mais misses iniciais — relevante em W3 e no controle
+  #               uniforme, onde 99,4% dos documentos sao distintos e boa parte
+  #               das entradas admitidas nunca e' reusada.
+  #               Vazio => usa o default do produto.
+  #
+  # MEMORY_LIMIT e DISK_LIMIT ficam sem setar: o default e' 80% da RAM detectada,
+  # e com um pod por no' o envelope e' o proprio no'. Pico medido em E1: 4,79 GiB.
+  # CACHE_POLICY e MV_SIZE_RATIO seguem no default do produto (clock, 10).
+  pinnedTables: ""
+  admissionThreshold: ""
+
+  workers: 4
+  telemetry: "off"        # telemetria anonima e' ruido de rede nao controlado
+  sqlPort: 6432
+  metricsPort: 9090
+  nodeRole: pgcache
+  resources:
+    requests: {cpu: "6", memory: 24Gi}   # D8as_v5: 32 GiB, ~5 GiB ficam com o kubelet
+
+# ── OpenFGA: os tres caminhos ───────────────────────────────────────────────
+openfga:
+  nodeRole: openfga
+  common:
+    # Teto real de concorrencia contra o banco, independente de qualquer outra
+    # flag. Igual nos tres, senao os caminhos nao sao comparaveis.
+    maxOpenConns: 30
+    # O default de 3 s faz uma run saturada medir timeout, nao latencia.
+    requestTimeout: 60s
+    # TTL do cache in-process do path C. E' a janela de obsolescencia que o
+    # PgCache, coerente por CDC, deveria bater.
+    cacheTtl: 10s
+  resources:
+    requests: {cpu: "1", memory: 2Gi}
+  paths:
+    - id: A
+      name: baseline       # custo real do datastore, sem cache nenhum
+      datastore: origin
+      caches: false
+      httpPort: 8080
+      grpcPort: 8081
+      metricsPort: 2112
+    - id: B
+      name: pgcache        # ganho atribuivel SO' ao PgCache
+      datastore: pgcache
+      caches: false
+      httpPort: 8090
+      grpcPort: 8091
+      metricsPort: 2113
+      # simple_protocol: sem ele o PgCache classifica ~99,97% como nao-cacheavel.
+      # Com ele os literais sao interpolados no texto do SQL e o espaco de shapes
+      # cresce com o produto cartesiano da massa. CONFUNDIMENTO CONHECIDO: o path
+      # B nao e' "o path A mais um cache", e sim "o path A sem prepared
+      # statements, mais um cache".
+      execMode: simple_protocol
+    - id: C
+      name: appcache       # o competidor honesto, que vem desligado de fabrica
+      datastore: origin
+      caches: true
+      httpPort: 8100
+      grpcPort: 8101
+      metricsPort: 2114
+
+# ── Gerador ─────────────────────────────────────────────────────────────────
+# Pod de trabalho, nao Job: voce entra com `kubectl exec` e roda seed/suite a
+# mao. Job com o benchmark embutido acopla o ciclo de vida do experimento ao do
+# objeto Kubernetes, e uma run abortada vira CrashLoop.
+loadgen:
+  nodeRole: loadgen
+  resources:
+    requests: {cpu: "3", memory: 8Gi}
+  # Repositorio clonado por init container. Vazio => voce popula com `kubectl cp`.
+  repoUrl: ""
+  repoRef: main
+  # Resultados vao para PVC, nao emptyDir. Correcao do D-17: o gerador perdeu
+  # 27 execucoes duas vezes quando o no' Spot foi desalocado.
+  storage:
+    className: managed-csi
+    size: 20Gi
+
+# ── Observabilidade ─────────────────────────────────────────────────────────
+#
+# Prometheus + Grafana como DEPLOYMENTS presos ao node pool de sistema — nunca
+# aos nos do lab. Os agentes do Azure Monitor foram desligados exatamente porque
+# eram DaemonSets: rodariam nos nos sob medicao, competindo por CPU dentro da
+# janela. Coletor que raspa pela rede, de fora, nao contamina o que mede.
+#
+# Acesso por port-forward, sem LoadBalancer:
+#   kubectl -n pgcache-lab port-forward svc/lab-grafana 3000:3000
+monitoring:
+  enabled: true
+  images:
+    prometheus: prom/prometheus:v3.1.0
+    grafana: grafana/grafana:11.5.1
+  retention: 6h            # observabilidade, nao fonte de resultado
+  nodeSelector:
+    agentpool: agentpool
+  tolerations: []
+  resources:
+    prometheus:
+      requests: {cpu: 200m, memory: 512Mi}
+    grafana:
+      requests: {cpu: 100m, memory: 256Mi}
+
+# ── Campanha in-cluster ─────────────────────────────────────────────────────
+#
+# Roda a suite como Job no node pool de sistema. Existe porque disparar o
+# scripts/campaign-aks.sh de um laptop falhou tres vezes por motivos que nao tem
+# nada a ver com o experimento: sessao encerrada, maquina dormindo, e o no' Spot
+# do gerador desaparecendo. Dentro do cluster, nenhum dos tres se aplica.
+#
+#   helm upgrade lab ./chart -n pgcache-lab \
+#     --set campaign.enabled=true --set campaign.id=r1
+#   kubectl -n pgcache-lab logs -f job/campaign-r1
+#
+# `id` precisa mudar a cada campanha: Job e' imutavel e o nome carrega o id.
+campaign:
+  enabled: false
+  id: r1
+  image: alpine/k8s:1.30.2
+  phases: "phase1 phase2 phase5"
+  reps: 3
+  rate: 40
+  duration: 60s
+  # Aquecimento adaptativo (D-24). 0 = comportamento antigo, para fixo em
+  # `duration`-equivalente. So' afeta o path B: A e C nao tem metricas de PgCache
+  # e caem no caminho fixo sozinhos. O joelho medido no probe de configuracao
+  # ficou em 2m30 com o PgCache stock e NAO convergiu em 3m30 com pin, entao o
+  # teto precisa de folga — se bater o teto sem estabilizar o gerador avisa e
+  # grava o warmup_s real.
+  warmupMax: "420s"
+  warmupKneeEps: "0.01"

@@ -1,0 +1,177 @@
+LAST SEEN   TYPE      REASON                   OBJECT                            MESSAGE
+16m         Normal    Scheduled                pod/pgcache-66c7bbf6fd-nsgbz      Successfully assigned pgcache-lab/pgcache-66c7bbf6fd-nsgbz to aks-userpool-11928609-vmss000000
+37m         Normal    Scheduled                pod/openfga-c-58cf4cd684-vnzj5    Successfully assigned pgcache-lab/openfga-c-58cf4cd684-vnzj5 to aks-userpool-11928609-vmss000002
+41m         Normal    Scheduled                pod/pgcache-54d9647cfb-7h2xg      Successfully assigned pgcache-lab/pgcache-54d9647cfb-7h2xg to aks-userpool-11928609-vmss000005
+37m         Normal    Scheduled                pod/openfga-a-6ff8668787-87fqk    Successfully assigned pgcache-lab/openfga-a-6ff8668787-87fqk to aks-userpool-11928609-vmss000002
+22m         Normal    Scheduled                pod/pgcache-5bdfd95d95-6wh28      Successfully assigned pgcache-lab/pgcache-5bdfd95d95-6wh28 to aks-userpool-11928609-vmss000000
+35m         Normal    Scheduled                pod/pgcache-5f4f84f457-xqk9r      Successfully assigned pgcache-lab/pgcache-5f4f84f457-xqk9r to aks-userpool-11928609-vmss000000
+37m         Normal    Scheduled                pod/pgcache-5576896b9d-m8w74      Successfully assigned pgcache-lab/pgcache-5576896b9d-m8w74 to aks-userpool-11928609-vmss000000
+51m         Normal    Scheduled                pod/pgcache-55cc97c89b-hqlj8      Successfully assigned pgcache-lab/pgcache-55cc97c89b-hqlj8 to aks-userpool-11928609-vmss000005
+37m         Normal    Scheduled                pod/openfga-b-644cdfb47-dz265     Successfully assigned pgcache-lab/openfga-b-644cdfb47-dz265 to aks-userpool-11928609-vmss000002
+10m         Normal    Scheduled                pod/pgcache-68b66c5cd7-qj2jr      Successfully assigned pgcache-lab/pgcache-68b66c5cd7-qj2jr to aks-userpool-11928609-vmss000000
+46m         Normal    Scheduled                pod/pgcache-76b687c9d8-d5sxl      Successfully assigned pgcache-lab/pgcache-76b687c9d8-d5sxl to aks-userpool-11928609-vmss000005
+22m         Normal    Scheduled                pod/openfga-b-59c689d54c-9x9gb    Successfully assigned pgcache-lab/openfga-b-59c689d54c-9x9gb to aks-userpool-11928609-vmss000002
+30m         Normal    Scheduled                pod/pgcache-9cb85998f-w578v       Successfully assigned pgcache-lab/pgcache-9cb85998f-w578v to aks-userpool-11928609-vmss000000
+37m         Normal    Scheduled                pod/origin-0                      Successfully assigned pgcache-lab/origin-0 to aks-userpool-11928609-vmss000005
+26m         Normal    Scheduled                pod/pgcache-56cffccd94-84j5f      Successfully assigned pgcache-lab/pgcache-56cffccd94-84j5f to aks-userpool-11928609-vmss000000
+37s         Normal    Scheduled                pod/pgcache-844b49ff44-h6lgn      Successfully assigned pgcache-lab/pgcache-844b49ff44-h6lgn to aks-userpool-11928609-vmss000000
+35m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+6m30s       Normal    Scheduled                pod/pgcache-7bffdf7767-8sbwz      Successfully assigned pgcache-lab/pgcache-7bffdf7767-8sbwz to aks-userpool-11928609-vmss000000
+34m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+33m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+57m         Normal    Scheduled                pod/pgcache-5c7b957b47-7bg5t      Successfully assigned pgcache-lab/pgcache-5c7b957b47-7bg5t to aks-userpool-11928609-vmss000005
+33m         Normal    Scheduled                pod/openfga-b-59c689d54c-wwrmn    Successfully assigned pgcache-lab/openfga-b-59c689d54c-wwrmn to aks-userpool-11928609-vmss000006
+57m         Normal    SuccessfulDelete         replicaset/pgcache-847b764655     Deleted pod: pgcache-847b764655-l94b7
+57m         Normal    Killing                  pod/pgcache-847b764655-l94b7      Stopping container pgcache
+57m         Normal    SuccessfulCreate         replicaset/pgcache-5c7b957b47     Created pod: pgcache-5c7b957b47-7bg5t
+57m         Normal    Started                  pod/pgcache-5c7b957b47-7bg5t      Container started
+57m         Normal    Pulled                   pod/pgcache-5c7b957b47-7bg5t      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+57m         Normal    Created                  pod/pgcache-5c7b957b47-7bg5t      Container created
+57m         Warning   Unhealthy                pod/pgcache-5c7b957b47-7bg5t      Readiness probe failed: dial tcp 10.244.0.57:6432: connect: connection refused
+51m         Normal    SuccessfulDelete         replicaset/pgcache-5c7b957b47     Deleted pod: pgcache-5c7b957b47-7bg5t
+51m         Normal    Killing                  pod/pgcache-5c7b957b47-7bg5t      Stopping container pgcache
+51m         Normal    SuccessfulCreate         replicaset/pgcache-55cc97c89b     Created pod: pgcache-55cc97c89b-hqlj8
+51m         Normal    Pulled                   pod/pgcache-55cc97c89b-hqlj8      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+51m         Normal    Created                  pod/pgcache-55cc97c89b-hqlj8      Container created
+51m         Normal    Started                  pod/pgcache-55cc97c89b-hqlj8      Container started
+46m         Warning   Unhealthy                pod/pgcache-55cc97c89b-hqlj8      Readiness probe failed: dial tcp 10.244.0.255:6432: connect: connection refused
+46m         Normal    Killing                  pod/pgcache-55cc97c89b-hqlj8      Stopping container pgcache
+46m         Normal    SuccessfulDelete         replicaset/pgcache-55cc97c89b     Deleted pod: pgcache-55cc97c89b-hqlj8
+46m         Normal    SuccessfulCreate         replicaset/pgcache-76b687c9d8     Created pod: pgcache-76b687c9d8-d5sxl
+46m         Normal    Pulled                   pod/pgcache-76b687c9d8-d5sxl      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+46m         Normal    Created                  pod/pgcache-76b687c9d8-d5sxl      Container created
+46m         Normal    Started                  pod/pgcache-76b687c9d8-d5sxl      Container started
+45m         Warning   Unhealthy                pod/pgcache-76b687c9d8-d5sxl      Readiness probe failed: dial tcp 10.244.0.115:6432: connect: connection refused
+41m         Normal    Killing                  pod/pgcache-76b687c9d8-d5sxl      Stopping container pgcache
+41m         Normal    SuccessfulDelete         replicaset/pgcache-76b687c9d8     Deleted pod: pgcache-76b687c9d8-d5sxl
+41m         Normal    Pulled                   pod/pgcache-54d9647cfb-7h2xg      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+41m         Normal    Created                  pod/pgcache-54d9647cfb-7h2xg      Container created
+41m         Normal    SuccessfulCreate         replicaset/pgcache-54d9647cfb     Created pod: pgcache-54d9647cfb-7h2xg
+41m         Warning   Unhealthy                pod/pgcache-54d9647cfb-7h2xg      Readiness probe failed: dial tcp 10.244.0.30:6432: connect: connection refused
+41m         Normal    Started                  pod/pgcache-54d9647cfb-7h2xg      Container started
+37m         Normal    SuccessfulCreate         replicaset/openfga-a-6ff8668787   Created pod: openfga-a-6ff8668787-87fqk
+37m         Normal    ScalingReplicaSet        deployment/openfga-a              Scaled up replica set openfga-a-6ff8668787 from 0 to 1
+37m         Normal    SuccessfulDelete         replicaset/pgcache-54d9647cfb     Deleted pod: pgcache-54d9647cfb-7h2xg
+37m         Normal    SuccessfulCreate         replicaset/openfga-b-644cdfb47    Created pod: openfga-b-644cdfb47-dz265
+37m         Normal    ScalingReplicaSet        deployment/openfga-c              Scaled up replica set openfga-c-58cf4cd684 from 0 to 1
+37m         Normal    ScalingReplicaSet        deployment/openfga-b              Scaled up replica set openfga-b-644cdfb47 from 0 to 1
+37m         Normal    SuccessfulDelete         statefulset/origin                Delete Pod origin-0 in StatefulSet origin successful
+37m         Normal    SuccessfulCreate         replicaset/openfga-c-58cf4cd684   Created pod: openfga-c-58cf4cd684-vnzj5
+37m         Normal    Killing                  pod/pgcache-54d9647cfb-7h2xg      Stopping container pgcache
+37m         Normal    Killing                  pod/origin-0                      Stopping container postgres
+37m         Normal    SuccessfulCreate         replicaset/pgcache-5576896b9d     Created pod: pgcache-5576896b9d-m8w74
+37m         Warning   FailedAttachVolume       pod/origin-0                      Multi-Attach error for volume "pvc-42f75379-c21a-4d77-89ec-a8b9d993adc6" Volume is already exclusively attached to one node and can't be attached to another
+37m         Normal    Pulling                  pod/pgcache-5576896b9d-m8w74      Pulling image "pgcache/pgcache:latest"
+37m         Normal    SuccessfulCreate         statefulset/origin                Create Pod origin-0 in StatefulSet origin successful
+37m         Normal    Pulled                   pod/pgcache-5576896b9d-m8w74      Successfully pulled image "pgcache/pgcache:latest" in 6.246s (6.246s including waiting). Image size: 127208599 bytes.
+37m         Normal    SuccessfulAttachVolume   pod/origin-0                      AttachVolume.Attach succeeded for volume "pvc-42f75379-c21a-4d77-89ec-a8b9d993adc6"
+37m         Normal    Pulling                  pod/origin-0                      Pulling image "postgres:17"
+37m         Normal    Started                  pod/openfga-c-58cf4cd684-vnzj5    Container started
+37m         Normal    Started                  pod/origin-0                      Container started
+37m         Normal    Pulled                   pod/openfga-c-58cf4cd684-vnzj5    Container image "openfga/openfga:latest" already present on machine and can be accessed by the pod
+37m         Normal    Created                  pod/openfga-c-58cf4cd684-vnzj5    Container created
+37m         Normal    Pulled                   pod/origin-0                      Successfully pulled image "postgres:17" in 6.291s (6.291s including waiting). Image size: 161234888 bytes.
+37m         Normal    Created                  pod/origin-0                      Container created
+37m         Normal    Pulled                   pod/openfga-a-6ff8668787-87fqk    Container image "openfga/openfga:latest" already present on machine and can be accessed by the pod
+37m         Normal    Started                  pod/openfga-a-6ff8668787-87fqk    Container started
+37m         Normal    Created                  pod/openfga-a-6ff8668787-87fqk    Container created
+36m         Warning   BackOff                  pod/pgcache-5576896b9d-m8w74      Back-off restarting failed container pgcache in pod pgcache-5576896b9d-m8w74_pgcache-lab(5c689538-a60e-4a5d-99af-d3aef3f47474)
+36m         Warning   Unhealthy                pod/openfga-c-867f7566fb-s6tp8    Readiness probe failed: HTTP probe failed with statuscode: 500
+36m         Warning   Unhealthy                pod/openfga-a-6c6dcc5567-ckt2m    Readiness probe failed: HTTP probe failed with statuscode: 500
+36m         Warning   Unhealthy                pod/openfga-a-6ff8668787-87fqk    Readiness probe failed: Get "http://10.224.0.8:8080/healthz": dial tcp 10.224.0.8:8080: connect: connection refused
+36m         Warning   Unhealthy                pod/openfga-b-65f5c6b5bf-vbchf    Readiness probe failed: HTTP probe failed with statuscode: 500
+36m         Normal    ScalingReplicaSet        deployment/openfga-a              Scaled down replica set openfga-a-6c6dcc5567 from 1 to 0
+36m         Normal    Killing                  pod/openfga-a-6c6dcc5567-ckt2m    Stopping container openfga
+36m         Normal    SuccessfulDelete         replicaset/openfga-a-6c6dcc5567   Deleted pod: openfga-a-6c6dcc5567-ckt2m
+36m         Warning   Unhealthy                pod/openfga-c-58cf4cd684-vnzj5    Readiness probe failed: Get "http://10.224.0.8:8100/healthz": dial tcp 10.224.0.8:8100: connect: connection refused
+36m         Normal    ScalingReplicaSet        deployment/openfga-c              Scaled down replica set openfga-c-867f7566fb from 1 to 0
+36m         Normal    SuccessfulDelete         replicaset/openfga-c-867f7566fb   Deleted pod: openfga-c-867f7566fb-s6tp8
+36m         Normal    Killing                  pod/openfga-c-867f7566fb-s6tp8    Stopping container openfga
+36m         Normal    Created                  pod/pgcache-5576896b9d-m8w74      Container created
+36m         Normal    Pulled                   pod/pgcache-5576896b9d-m8w74      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+36m         Normal    Started                  pod/pgcache-5576896b9d-m8w74      Container started
+36m         Warning   BackOff                  pod/openfga-b-644cdfb47-dz265     Back-off restarting failed container openfga in pod openfga-b-644cdfb47-dz265_pgcache-lab(ff88c2ee-8745-4067-876b-00717460e6fc)
+36m         Warning   Unhealthy                pod/pgcache-5576896b9d-m8w74      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+36m         Normal    Pulled                   pod/openfga-b-644cdfb47-dz265     Container image "openfga/openfga:latest" already present on machine and can be accessed by the pod
+36m         Warning   Unhealthy                pod/openfga-b-644cdfb47-dz265     Readiness probe failed: Get "http://10.224.0.8:8090/healthz": dial tcp 10.224.0.8:8090: connect: connection refused
+36m         Normal    Created                  pod/openfga-b-644cdfb47-dz265     Container created
+36m         Normal    Started                  pod/openfga-b-644cdfb47-dz265     Container started
+35m         Normal    ScalingReplicaSet        deployment/openfga-b              Scaled down replica set openfga-b-65f5c6b5bf from 1 to 0
+35m         Normal    SuccessfulDelete         replicaset/openfga-b-65f5c6b5bf   Deleted pod: openfga-b-65f5c6b5bf-vbchf
+35m         Normal    Killing                  pod/openfga-b-65f5c6b5bf-vbchf    Stopping container openfga
+35m         Normal    Killing                  pod/pgcache-5576896b9d-m8w74      Stopping container pgcache
+35m         Normal    SuccessfulCreate         replicaset/pgcache-5f4f84f457     Created pod: pgcache-5f4f84f457-xqk9r
+35m         Normal    SuccessfulDelete         replicaset/pgcache-5576896b9d     Deleted pod: pgcache-5576896b9d-m8w74
+35m         Normal    Created                  pod/pgcache-5f4f84f457-xqk9r      Container created
+35m         Normal    Started                  pod/pgcache-5f4f84f457-xqk9r      Container started
+35m         Normal    Pulled                   pod/pgcache-5f4f84f457-xqk9r      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+35m         Warning   Unhealthy                pod/pgcache-5f4f84f457-xqk9r      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+35m         Normal    SuccessfulCreate         replicaset/openfga-b-59c689d54c   Created pod: openfga-b-59c689d54c-wwrmn
+35m         Normal    ScalingReplicaSet        deployment/openfga-b              Scaled up replica set openfga-b-59c689d54c from 0 to 1
+35m         Normal    TriggeredScaleUp         pod/openfga-b-59c689d54c-wwrmn    pod triggered scale-up: [{aks-userpool-11928609-vmss 4->5 (max: 5)}]
+33m         Normal    Pulling                  pod/openfga-b-59c689d54c-wwrmn    Pulling image "openfga/openfga:latest"
+33m         Normal    Started                  pod/openfga-b-59c689d54c-wwrmn    Container started
+33m         Normal    Created                  pod/openfga-b-59c689d54c-wwrmn    Container created
+33m         Normal    Pulled                   pod/openfga-b-59c689d54c-wwrmn    Successfully pulled image "openfga/openfga:latest" in 3.233s (3.233s including waiting). Image size: 26703254 bytes.
+33m         Normal    SuccessfulDelete         replicaset/openfga-b-644cdfb47    Deleted pod: openfga-b-644cdfb47-dz265
+33m         Normal    ScalingReplicaSet        deployment/openfga-b              Scaled down replica set openfga-b-644cdfb47 from 1 to 0
+33m         Normal    Killing                  pod/openfga-b-644cdfb47-dz265     Stopping container openfga
+30m         Normal    SuccessfulDelete         replicaset/pgcache-5f4f84f457     Deleted pod: pgcache-5f4f84f457-xqk9r
+30m         Normal    Killing                  pod/pgcache-5f4f84f457-xqk9r      Stopping container pgcache
+30m         Normal    SuccessfulCreate         replicaset/pgcache-9cb85998f      Created pod: pgcache-9cb85998f-w578v
+30m         Normal    Started                  pod/pgcache-9cb85998f-w578v       Container started
+30m         Normal    Created                  pod/pgcache-9cb85998f-w578v       Container created
+30m         Normal    Pulled                   pod/pgcache-9cb85998f-w578v       Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+30m         Warning   Unhealthy                pod/pgcache-9cb85998f-w578v       Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+26m         Normal    SuccessfulDelete         replicaset/pgcache-9cb85998f      Deleted pod: pgcache-9cb85998f-w578v
+26m         Normal    Killing                  pod/pgcache-9cb85998f-w578v       Stopping container pgcache
+26m         Normal    SuccessfulCreate         replicaset/pgcache-56cffccd94     Created pod: pgcache-56cffccd94-84j5f
+26m         Normal    Created                  pod/pgcache-56cffccd94-84j5f      Container created
+26m         Normal    Pulled                   pod/pgcache-56cffccd94-84j5f      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+26m         Normal    Started                  pod/pgcache-56cffccd94-84j5f      Container started
+26m         Warning   Unhealthy                pod/pgcache-56cffccd94-84j5f      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+22m         Normal    Killing                  pod/pgcache-56cffccd94-84j5f      Stopping container pgcache
+22m         Normal    SuccessfulDelete         replicaset/pgcache-56cffccd94     Deleted pod: pgcache-56cffccd94-84j5f
+22m         Normal    SuccessfulCreate         replicaset/pgcache-5bdfd95d95     Created pod: pgcache-5bdfd95d95-6wh28
+22m         Normal    Started                  pod/pgcache-5bdfd95d95-6wh28      Container started
+22m         Normal    Created                  pod/pgcache-5bdfd95d95-6wh28      Container created
+22m         Normal    Pulled                   pod/pgcache-5bdfd95d95-6wh28      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+22m         Warning   Unhealthy                pod/pgcache-5bdfd95d95-6wh28      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+22m         Warning   Unhealthy                pod/openfga-b-59c689d54c-wwrmn    Readiness probe failed: HTTP probe failed with statuscode: 500
+22m         Normal    ScaleDown                pod/openfga-b-59c689d54c-wwrmn    deleting pod for node scale down
+22m         Warning   Unhealthy                pod/openfga-b-59c689d54c-wwrmn    Readiness probe failed: Get "http://10.224.0.7:8090/healthz": dial tcp 10.224.0.7:8090: connect: connection refused
+22m         Normal    Killing                  pod/openfga-b-59c689d54c-wwrmn    Stopping container openfga
+22m         Normal    SuccessfulCreate         replicaset/openfga-b-59c689d54c   Created pod: openfga-b-59c689d54c-9x9gb
+22m         Normal    Started                  pod/openfga-b-59c689d54c-9x9gb    Container started
+22m         Normal    Created                  pod/openfga-b-59c689d54c-9x9gb    Container created
+22m         Normal    Pulled                   pod/openfga-b-59c689d54c-9x9gb    Container image "openfga/openfga:latest" already present on machine and can be accessed by the pod
+16m         Normal    Killing                  pod/pgcache-5bdfd95d95-6wh28      Stopping container pgcache
+16m         Normal    SuccessfulDelete         replicaset/pgcache-5bdfd95d95     Deleted pod: pgcache-5bdfd95d95-6wh28
+16m         Normal    SuccessfulCreate         replicaset/pgcache-66c7bbf6fd     Created pod: pgcache-66c7bbf6fd-nsgbz
+16m         Normal    Pulled                   pod/pgcache-66c7bbf6fd-nsgbz      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+16m         Normal    Created                  pod/pgcache-66c7bbf6fd-nsgbz      Container created
+16m         Normal    Started                  pod/pgcache-66c7bbf6fd-nsgbz      Container started
+16m         Warning   Unhealthy                pod/pgcache-66c7bbf6fd-nsgbz      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+10m         Normal    Killing                  pod/pgcache-66c7bbf6fd-nsgbz      Stopping container pgcache
+10m         Normal    SuccessfulDelete         replicaset/pgcache-66c7bbf6fd     Deleted pod: pgcache-66c7bbf6fd-nsgbz
+10m         Normal    Pulled                   pod/pgcache-68b66c5cd7-qj2jr      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+10m         Normal    SuccessfulCreate         replicaset/pgcache-68b66c5cd7     Created pod: pgcache-68b66c5cd7-qj2jr
+10m         Normal    Created                  pod/pgcache-68b66c5cd7-qj2jr      Container created
+10m         Normal    Started                  pod/pgcache-68b66c5cd7-qj2jr      Container started
+10m         Warning   Unhealthy                pod/pgcache-68b66c5cd7-qj2jr      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+6m32s       Normal    SuccessfulDelete         replicaset/pgcache-68b66c5cd7     Deleted pod: pgcache-68b66c5cd7-qj2jr
+6m32s       Normal    Killing                  pod/pgcache-68b66c5cd7-qj2jr      Stopping container pgcache
+6m31s       Normal    Started                  pod/pgcache-7bffdf7767-8sbwz      Container started
+6m31s       Normal    Created                  pod/pgcache-7bffdf7767-8sbwz      Container created
+6m31s       Normal    Pulled                   pod/pgcache-7bffdf7767-8sbwz      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+6m31s       Normal    SuccessfulCreate         replicaset/pgcache-7bffdf7767     Created pod: pgcache-7bffdf7767-8sbwz
+40s         Normal    SuccessfulDelete         replicaset/pgcache-7bffdf7767     Deleted pod: pgcache-7bffdf7767-8sbwz
+40s         Normal    ScalingReplicaSet        deployment/pgcache                (combined from similar events): Scaled down replica set pgcache-7bffdf7767 from 1 to 0
+40s         Warning   Unhealthy                pod/pgcache-7bffdf7767-8sbwz      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+40s         Normal    Killing                  pod/pgcache-7bffdf7767-8sbwz      Stopping container pgcache
+38s         Normal    Started                  pod/pgcache-844b49ff44-h6lgn      Container started
+38s         Normal    Pulled                   pod/pgcache-844b49ff44-h6lgn      Container image "pgcache/pgcache:latest" already present on machine and can be accessed by the pod
+38s         Normal    Created                  pod/pgcache-844b49ff44-h6lgn      Container created
+38s         Normal    SuccessfulCreate         replicaset/pgcache-844b49ff44     Created pod: pgcache-844b49ff44-h6lgn
+37s         Warning   Unhealthy                pod/pgcache-844b49ff44-h6lgn      Readiness probe failed: dial tcp 10.224.0.6:6432: connect: connection refused
+25s         Warning   Unhealthy                pod/openfga-b-59c689d54c-9x9gb    Readiness probe failed: HTTP probe failed with statuscode: 500

@@ -1,0 +1,103 @@
+{{- $root := . -}}
+{{- $c := .Values.openfga.common -}}
+{{/*
+Os tres caminhos saem do MESMO template, iterando .Values.openfga.paths. Isto nao
+e' so' economia de linhas: e' a garantia de que A, B e C diferem apenas nos
+campos declarados em values.yaml — datastore, caches e portas. Manifests
+separados permitem que uma flag divirja sem ninguem notar, e ai' a comparacao
+deixa de medir o que diz medir.
+
+Os tres dividem o mesmo no'. Nao ha' contencao porque a regra de ouro e' um path
+sob carga por vez (PLAN.md secao 8.1) — os outros dois ficam ociosos.
+*/}}
+{{- range $p := .Values.openfga.paths }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openfga-{{ $p.id | lower }}
+  labels:
+    {{- include "lab.labels" $root | nindent 4 }}
+    lab.benedet/path: {{ $p.id }}
+    lab.benedet/path-name: {{ $p.name }}
+spec:
+  {{- include "lab.serviceClusterIP" $root | nindent 2 }}
+  selector: {app: openfga-{{ $p.id | lower }}}
+  ports:
+    - {name: http, port: {{ $p.httpPort }}, targetPort: {{ $p.httpPort }}}
+    - {name: metrics, port: {{ $p.metricsPort }}, targetPort: {{ $p.metricsPort }}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openfga-{{ $p.id | lower }}
+  labels:
+    {{- include "lab.labels" $root | nindent 4 }}
+    lab.benedet/path: {{ $p.id }}
+spec:
+  replicas: 1
+  # Recreate, nunca RollingUpdate. O lab e' um pod por no': o RollingUpdate cria o
+  # pod novo ANTES de matar o velho, e o novo precisa de um no' livre que nao
+  # existe. Na r4 o `rollout restart deploy/pgcache deploy/openfga-b` do
+  # cold_pgcache derrubou o PgCache (que ja' era Recreate) e o openfga-b novo
+  # ocupou o no' recem-liberado; o PgCache ficou Pending e a campanha travou no
+  # primeiro gate. Recreate tambem e' o que o experimento quer: reiniciar o path B
+  # deve deixar UM openfga-b falando com UM PgCache frio, nunca dois de cada.
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: openfga-{{ $p.id | lower }}}}
+  template:
+    metadata:
+      labels:
+        app: openfga-{{ $p.id | lower }}
+        lab.benedet/path: {{ $p.id }}
+        lab.benedet/role: {{ $root.Values.openfga.nodeRole }}
+        {{- include "lab.labels" $root | nindent 8 }}
+    spec:
+      {{- include "lab.podNetwork" $root | nindent 6 }}
+      {{- include "lab.placement" (dict "root" $root "role" $root.Values.openfga.nodeRole) | nindent 6 }}
+      containers:
+        - name: openfga
+          image: {{ $root.Values.images.openfga }}
+          imagePullPolicy: {{ $root.Values.images.pullPolicy }}
+          args:
+            - run
+            - --datastore-engine=postgres
+            - --datastore-uri={{ include "lab.datastoreUri" (dict "root" $root "path" $p) }}
+            # Teto real de concorrencia contra o banco, independente de qualquer
+            # outra flag. Igual nos tres.
+            - --datastore-max-open-conns={{ $c.maxOpenConns }}
+            # O default de 3 s faz uma run saturada medir timeout, nao latencia.
+            - --request-timeout={{ $c.requestTimeout }}
+            {{- if $p.caches }}
+            # Path C — o competidor honesto. Estas flags vem DESLIGADAS de
+            # fabrica; o binario padrao e' cache-free no caminho de tuplas.
+            - --check-query-cache-enabled=true
+            - --check-iterator-cache-enabled=true
+            - --cache-controller-enabled=true
+            - --check-query-cache-ttl={{ $c.cacheTtl }}
+            {{- else }}
+            - --check-query-cache-enabled=false
+            - --check-iterator-cache-enabled=false
+            - --cache-controller-enabled=false
+            {{- end }}
+            # datastore_query_count e' a metrica-chave: 124 a 480 consultas por
+            # requisicao. E' a alavanca que transforma sobrecarga pequena em
+            # colapso, e sem ela nao da' para saber se dois caminhos fizeram a
+            # mesma quantidade de trabalho.
+            - --metrics-enable-rpc-histograms
+            - --datastore-metrics-enabled
+            # Porta gRPC propria por caminho. Com hostNetwork os tres pods
+            # dividem o namespace de rede do no', entao o default 8081 colidia:
+            # "panic: failed to listen: 0.0.0.0:8081: address already in use".
+            - --grpc-addr=0.0.0.0:{{ $p.grpcPort }}
+            - --http-addr=0.0.0.0:{{ $p.httpPort }}
+            - --metrics-addr=0.0.0.0:{{ $p.metricsPort }}
+          ports:
+            - {containerPort: {{ $p.httpPort }}, name: http}
+            - {containerPort: {{ $p.metricsPort }}, name: metrics}
+          resources: {{- toYaml $root.Values.openfga.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: {path: /healthz, port: {{ $p.httpPort }}}
+            periodSeconds: 5
+            failureThreshold: 30
+{{- end }}

@@ -1,0 +1,1210 @@
+[21:38:24Z] CAMPANHA INICIADA — namespace pgcache-lab, reps=3, rate=40, dur=60s
+NAME                         READY   STATUS    RESTARTS      AGE     IP            NODE                               NOMINATED NODE   READINESS GATES
+loadgen                      1/1     Running   0             50m     10.224.0.10   aks-userpool-11928609-vmss000004   <none>           <none>
+openfga-a-6ff8668787-4k67m   1/1     Running   0             18m     10.224.0.8    aks-userpool-11928609-vmss000002   <none>           <none>
+openfga-b-796d9f996f-qzsxq   1/1     Running   1 (79s ago)   2m44s   10.224.0.9    aks-userpool-11928609-vmss000003   <none>           <none>
+openfga-c-58cf4cd684-c2rcc   1/1     Running   0             18m     10.224.0.8    aks-userpool-11928609-vmss000002   <none>           <none>
+origin-0                     1/1     Running   0             50m     10.224.0.6    aks-userpool-11928609-vmss000000   <none>           <none>
+pgcache-6dd9b6b6b9-k66g6     1/1     Running   0             2m13s   10.224.0.4    aks-userpool-11928609-vmss000005   <none>           <none>
+[21:38:25Z] ######## FASE 1 — E1 · networkMode=bare · W1/W2/W3 · 3 reps ########
+[21:38:34Z] ==== SEED E1 ====
+store=01KZ26M6CW4Z2E74WVPR0D38RC model=01KZ26M6CZWZ5P77A8M9AFTQB5 degrau=E1 tuplas_previstas=84598
+emitidas 84598 tuplas para o degrau E1
+COPY 84598
+SEED_OK
+[21:38:37Z] -- reiniciando PgCache (cache frio pos-seed) e openfga-b
+[21:39:33Z] -- validando massa contra o oraculo
+verificacao do degrau E1 (http://openfga-a.pgcache-lab.svc.cluster.local:8080)
+  positivos confirmados: 300   divergentes: 0
+  negativos confirmados: 300   divergentes: 0
+  erros de transporte:   0
+  OK — oraculo e OpenFGA concordam em 100% da amostra.
+[21:39:37Z] -- gate de correcao W7 (A vs B)
+W7 — correcao diferencial (http://openfga-a.pgcache-lab.svc.cluster.local:8080 vs http://openfga-b.pgcache-lab.svc.cluster.local:8090)
+  amostras comparadas : 4000
+  concordancia A==B   : 4000 (100.000000%)
+  divergencias        : 0
+  A bate com oraculo  : 4000 (100.000000%)
+  B bate com oraculo  : 4000 (100.000000%)
+  erros de transporte : 0
+  OK — nenhuma divergencia de decisao.
+[21:40:41Z] --- E1/w1/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.08  p90=7.44  p95=8.80  p99=13.26  p99.9=19.39  max=21.34
+  amplificacao: 106.95 queries no datastore por requisicao
+  saida       : results/E1/w1/A-bare-r1
+
+[21:42:27Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r1:
+6m4s        Warning   FailedScheduling         pod/pgcache-6dd9b6b6b9-k66g6          0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+54m         Warning   FailedScheduling         pod/openfga-b-db45fc99d-mvr7t         0/4 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 2 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/4 nodes are available: 4 Preemption is not helpful for scheduling.
+54m         Warning   FailedScheduling         pod/openfga-b-db45fc99d-mvr7t         0/2 nodes are available: 2 node(s) didn't match Pod's node affinity/selector. no new claims to deallocate, preemption: 0/2 nodes are available: 2 Preemption is not helpful for scheduling.
+44m         Warning   FailedScheduling         pod/openfga-b-5c678ddc9f-kkpkh        0/7 nodes are available: 2 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+6m45s       Warning   FailedScheduling         pod/openfga-b-796d9f996f-qzsxq        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[21:42:52Z] --- E1/w1/B run=bare-r1 dist=zipf rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2017 / 383
+  latencia ms : p50=5.21  p90=15.17  p95=18.20  p99=22.53  p99.9=29.53  max=31.52
+  amplificacao: 111.64 queries no datastore por requisicao
+  pgcache     : 236028 hits / 25184 misses (90.4% hit ratio)
+  saida       : results/E1/w1/B-bare-r1
+
+[21:44:42Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/bare-r1:
+8m59s       Warning   FailedScheduling         pod/openfga-b-796d9f996f-qzsxq        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+42m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+40m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+47m         Warning   FailedScheduling         pod/openfga-b-5c678ddc9f-kkpkh        0/7 nodes are available: 2 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+44m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+[21:44:50Z] --- E1/w1/C run=bare-r1 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.51  p90=8.83  p95=10.40  p99=16.02  p99.9=22.23  max=24.81
+  amplificacao: 68.40 queries no datastore por requisicao
+  saida       : results/E1/w1/C-bare-r1
+
+[21:46:44Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/bare-r1:
+11m         Warning   FailedScheduling         pod/openfga-b-796d9f996f-qzsxq        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+44m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+42m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+49m         Warning   FailedScheduling         pod/openfga-b-5c678ddc9f-kkpkh        0/7 nodes are available: 2 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+46m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+[21:46:49Z] --- E1/w2/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.11  p90=8.40  p95=9.24  p99=11.56  p99.9=16.54  max=19.77
+  amplificacao: 171.28 queries no datastore por requisicao
+  saida       : results/E1/w2/A-bare-r1
+
+[21:48:37Z] !! CONTAMINACAO POSSIVEL apos E1/w2/A/bare-r1:
+59m         Warning   FailedScheduling         pod/openfga-b-db45fc99d-mvr7t         0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 2 node(s) didn't match pod anti-affinity rules, 2 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 2 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+59m         Warning   FailedScheduling         pod/openfga-b-db45fc99d-mvr7t         0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+60m         Warning   FailedScheduling         pod/openfga-b-db45fc99d-mvr7t         0/5 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 5 Preemption is not helpful for scheduling.
+60m         Warning   FailedScheduling         pod/openfga-b-db45fc99d-mvr7t         0/4 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 2 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/4 nodes are available: 4 Preemption is not helpful for scheduling.
+60m         Warning   FailedScheduling         pod/pgcache-67f6b84569-hcb2p          0/4 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 2 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/4 nodes are available: 4 Preemption is not helpful for scheduling.
+[21:49:01Z] --- E1/w2/B run=bare-r1 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[21:49:02Z] !! CONTAMINACAO POSSIVEL apos E1/w2/B/bare-r1:
+13m         Warning   FailedScheduling         pod/openfga-b-796d9f996f-qzsxq        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+60m         Warning   FailedScheduling         pod/pgcache-67f6b84569-hcb2p          0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+60m         Warning   FailedScheduling         pod/pgcache-67f6b84569-hcb2p          0/5 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 5 Preemption is not helpful for scheduling.
+60m         Warning   FailedScheduling         pod/pgcache-67f6b84569-hcb2p          0/4 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 2 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/4 nodes are available: 4 Preemption is not helpful for scheduling.
+51m         Warning   FailedScheduling         pod/openfga-b-5c678ddc9f-kkpkh        0/7 nodes are available: 2 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+[21:49:08Z] --- E1/w2/C run=bare-r1 dist=zipf rate=40
+
+── appcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.95  p90=9.85  p95=10.51  p99=13.87  p99.9=22.43  max=24.99
+  amplificacao: 147.12 queries no datastore por requisicao
+  saida       : results/E1/w2/C-bare-r1
+
+[21:50:56Z] !! CONTAMINACAO POSSIVEL apos E1/w2/C/bare-r1:
+14m         Warning   FailedScheduling         pod/pgcache-6dd9b6b6b9-k66g6          0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+61m         Warning   FailedScheduling         pod/openfga-b-db45fc99d-mvr7t         0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+48m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+46m         Warning   FailedScheduling         pod/openfga-migrate-q9gsn             0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+53m         Warning   FailedScheduling         pod/openfga-b-5c678ddc9f-kkpkh        0/7 nodes are available: 2 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+[21:51:02Z] --- E1/w3/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.10  p90=7.32  p95=8.20  p99=9.53  p99.9=12.05  max=14.97
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-bare-r1
+
+[21:52:48Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/bare-r1:
+17m         Warning   FailedScheduling         pod/openfga-b-796d9f996f-qzsxq        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+64m         Warning   FailedScheduling         pod/pgcache-67f6b84569-hcb2p          0/4 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 2 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/4 nodes are available: 4 Preemption is not helpful for scheduling.
+55m         Warning   FailedScheduling         pod/openfga-b-5c678ddc9f-kkpkh        0/7 nodes are available: 2 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+64m         Warning   FailedScheduling         pod/pgcache-67f6b84569-hcb2p          0/5 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 5 Preemption is not helpful for scheduling.
+63m         Warning   FailedScheduling         pod/pgcache-67f6b84569-hcb2p          0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+[21:53:07Z] --- E1/w3/B run=bare-r1 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=9.19  p90=18.45  p95=21.11  p99=25.81  p99.9=29.06  max=50.02
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268476 hits / 30002 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-bare-r1
+
+[21:54:56Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/bare-r1:
+57m         Warning   FailedScheduling         pod/openfga-b-5c678ddc9f-kkpkh        0/7 nodes are available: 2 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+19m         Warning   FailedScheduling         pod/openfga-b-796d9f996f-qzsxq        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+18m         Warning   FailedScheduling         pod/pgcache-6dd9b6b6b9-k66g6          0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+18m         Warning   FailedScheduling         pod/pgcache-6dd9b6b6b9-k66g6          0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+18m         Warning   FailedScheduling         pod/pgcache-6dd9b6b6b9-k66g6          0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[21:55:13Z] --- E1/w3/C run=bare-r1 dist=zipf rate=40
+E0802 18:56:43.748898   31732 v2.go:150] "Unhandled Error" err="next reader: read tcp 192.168.1.12:64208->4.203.69.9:443: i/o timeout"
+E0802 18:56:43.748896   31732 v2.go:167] "Unhandled Error" err="next reader: read tcp 192.168.1.12:64208->4.203.69.9:443: i/o timeout"
+error: error reading from error stream: next reader: read tcp 192.168.1.12:64208->4.203.69.9:443: i/o timeout
+[21:57:12Z] --- E1/w1/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.12  p90=7.52  p95=9.01  p99=13.46  p99.9=17.34  max=19.51
+  amplificacao: 107.32 queries no datastore por requisicao
+  saida       : results/E1/w1/A-bare-r2
+
+[21:59:25Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r2:
+22m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+57m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+70m         Warning   FailedScheduling    pod/pgcache-67f6b84569-hcb2p      0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+23m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+70m         Warning   FailedScheduling    pod/openfga-b-db45fc99d-mvr7t     0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+[21:59:48Z] --- E1/w1/B run=bare-r2 dist=zipf rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=5.34  p90=15.03  p95=18.62  p99=24.59  p99.9=176.64  max=238.81
+  amplificacao: 112.15 queries no datastore por requisicao
+  pgcache     : 237936 hits / 24695 misses (90.6% hit ratio)
+  saida       : results/E1/w1/B-bare-r2
+
+[22:01:35Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/bare-r2:
+72m         Warning   FailedScheduling    pod/loadgen                       0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+25m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+72m         Warning   FailedScheduling    pod/openfga-c-779945884f-jzw48    0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+25m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+72m         Warning   FailedScheduling    pod/pgcache-67f6b84569-hcb2p      0/6 nodes are available: 2 node(s) didn't match Pod's node affinity/selector, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 6 Preemption is not helpful for scheduling.
+[22:01:40Z] --- E1/w1/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.54  p90=8.86  p95=10.35  p99=15.70  p99.9=23.79  max=25.16
+  amplificacao: 67.97 queries no datastore por requisicao
+  saida       : results/E1/w1/C-bare-r2
+
+[22:03:26Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/bare-r2:
+27m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+26m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+59m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+27m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+27m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:03:31Z] --- E1/w2/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.15  p90=8.54  p95=9.23  p99=11.54  p99.9=18.26  max=18.97
+  amplificacao: 171.27 queries no datastore por requisicao
+  saida       : results/E1/w2/A-bare-r2
+
+[22:05:17Z] !! CONTAMINACAO POSSIVEL apos E1/w2/A/bare-r2:
+28m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+28m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+29m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+61m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+29m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:05:40Z] --- E1/w2/B run=bare-r2 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[22:05:41Z] !! CONTAMINACAO POSSIVEL apos E1/w2/B/bare-r2:
+29m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+29m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+28m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+61m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+29m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:05:46Z] --- E1/w2/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.84  p90=9.73  p95=10.38  p99=13.52  p99.9=23.52  max=25.14
+  amplificacao: 146.67 queries no datastore por requisicao
+  saida       : results/E1/w2/C-bare-r2
+
+[22:07:32Z] !! CONTAMINACAO POSSIVEL apos E1/w2/C/bare-r2:
+31m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+63m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+31m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+30m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+31m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:07:37Z] --- E1/w3/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.01  p90=7.02  p95=8.03  p99=9.90  p99.9=12.55  max=17.64
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-bare-r2
+
+[22:09:26Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/bare-r2:
+33m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+33m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+32m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+33m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+65m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+[22:09:50Z] --- E1/w3/B run=bare-r2 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[22:09:51Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/bare-r2:
+34m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+33m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+65m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+33m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+32m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:09:56Z] --- E1/w3/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.33  p90=7.71  p95=8.83  p99=10.57  p99.9=12.88  max=19.81
+  amplificacao: 71.61 queries no datastore por requisicao
+  saida       : results/E1/w3/C-bare-r2
+
+[22:11:42Z] !! CONTAMINACAO POSSIVEL apos E1/w3/C/bare-r2:
+35m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+35m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+67m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+35m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+34m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:11:47Z] --- E1/w1/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.09  p90=7.29  p95=8.83  p99=12.73  p99.9=17.05  max=20.08
+  amplificacao: 107.39 queries no datastore por requisicao
+  saida       : results/E1/w1/A-bare-r3
+
+[22:13:33Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r3:
+37m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+37m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+69m         Warning   FailedScheduling    pod/openfga-migrate-q9gsn         0/7 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) were unschedulable, 5 node(s) didn't satisfy existing pods anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 2 Preemption is not helpful for scheduling, 5 No preemption victims found for incoming pod.
+37m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+36m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:13:55Z] --- E1/w1/B run=bare-r3 dist=zipf rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=5.27  p90=14.61  p95=17.95  p99=23.75  p99.9=31.61  max=36.55
+  amplificacao: 112.38 queries no datastore por requisicao
+  pgcache     : 238018 hits / 25234 misses (90.4% hit ratio)
+  saida       : results/E1/w1/B-bare-r3
+
+[22:15:42Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/bare-r3:
+39m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+39m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+38m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+39m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:15:47Z] --- E1/w1/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.45  p90=8.51  p95=10.52  p99=15.80  p99.9=22.76  max=23.65
+  amplificacao: 68.19 queries no datastore por requisicao
+  saida       : results/E1/w1/C-bare-r3
+
+[22:17:33Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/bare-r3:
+41m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+41m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+40m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+41m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:17:38Z] --- E1/w2/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.04  p90=8.43  p95=9.17  p99=11.49  p99.9=17.69  max=19.30
+  amplificacao: 171.19 queries no datastore por requisicao
+  saida       : results/E1/w2/A-bare-r3
+
+[22:19:24Z] !! CONTAMINACAO POSSIVEL apos E1/w2/A/bare-r3:
+43m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+43m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+42m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+43m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:19:43Z] --- E1/w2/B run=bare-r3 dist=zipf rate=40
+
+── pgcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=8.31  p90=20.60  p95=22.62  p99=26.14  p99.9=58.09  max=207.29
+  amplificacao: 171.30 queries no datastore por requisicao
+  pgcache     : 387334 hits / 22384 misses (94.5% hit ratio)
+  saida       : results/E1/w2/B-bare-r3
+
+[22:21:30Z] !! CONTAMINACAO POSSIVEL apos E1/w2/B/bare-r3:
+44m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+45m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+45m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+45m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:21:35Z] --- E1/w2/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.83  p90=9.73  p95=10.23  p99=13.44  p99.9=22.11  max=25.32
+  amplificacao: 147.03 queries no datastore por requisicao
+  saida       : results/E1/w2/C-bare-r3
+
+[22:23:21Z] !! CONTAMINACAO POSSIVEL apos E1/w2/C/bare-r3:
+46m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+46m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+47m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+47m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:23:26Z] --- E1/w3/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.99  p90=7.21  p95=8.20  p99=9.81  p99.9=17.77  max=38.67
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-bare-r3
+
+[22:25:12Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/bare-r3:
+48m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+48m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+48m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+49m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:25:38Z] --- E1/w3/B run=bare-r3 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=9.50  p90=18.96  p95=21.98  p99=26.51  p99.9=33.46  max=37.76
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268452 hits / 30026 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-bare-r3
+
+[22:27:25Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/bare-r3:
+51m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+51m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+50m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+51m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:27:30Z] --- E1/w3/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.49  p90=7.81  p95=8.87  p99=10.70  p99.9=13.68  max=19.48
+  amplificacao: 71.42 queries no datastore por requisicao
+  saida       : results/E1/w3/C-bare-r3
+
+[22:29:16Z] !! CONTAMINACAO POSSIVEL apos E1/w3/C/bare-r3:
+53m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+52m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+52m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+53m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:29:21Z] ######## FASE 2 — E1 · bare · doc-dist=uniform (controle) ########
+[22:29:21Z] --- E1/w1/A run=unif-r1 dist=uniform rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.85  p90=8.33  p95=10.02  p99=14.08  p99.9=17.92  max=18.63
+  amplificacao: 123.74 queries no datastore por requisicao
+  saida       : results/E1/w1/A-unif-r1
+
+[22:31:07Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/unif-r1:
+54m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+54m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+54m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+55m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:31:31Z] --- E1/w1/B run=unif-r1 dist=uniform rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=6.02  p90=18.37  p95=21.37  p99=26.75  p99.9=31.79  max=41.90
+  amplificacao: 129.74 queries no datastore por requisicao
+  pgcache     : 275597 hits / 28340 misses (90.7% hit ratio)
+  saida       : results/E1/w1/B-unif-r1
+
+[22:33:17Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/unif-r1:
+57m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+56m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+57m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+56m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:33:23Z] --- E1/w1/C run=unif-r1 dist=uniform rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.03  p90=9.73  p95=11.66  p99=19.50  p99.9=24.87  max=26.73
+  amplificacao: 79.47 queries no datastore por requisicao
+  saida       : results/E1/w1/C-unif-r1
+
+[22:35:08Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/unif-r1:
+59m         Warning   FailedScheduling    pod/openfga-b-796d9f996f-qzsxq    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+58m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+58m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+58m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:35:14Z] --- E1/w3/A run=unif-r1 dist=uniform rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.97  p90=8.11  p95=8.82  p99=10.82  p99.9=18.63  max=19.78
+  amplificacao: 170.24 queries no datastore por requisicao
+  saida       : results/E1/w3/A-unif-r1
+
+[22:36:59Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/unif-r1:
+60m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:37:24Z] --- E1/w3/B run=unif-r1 dist=uniform rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=12.15  p90=18.99  p95=20.14  p99=22.85  p99.9=37.79  max=55.68
+  amplificacao: 170.24 queries no datastore por requisicao
+  pgcache     : 366787 hits / 40632 misses (90.0% hit ratio)
+  saida       : results/E1/w3/B-unif-r1
+
+[22:39:11Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/unif-r1:
+62m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6      0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:39:16Z] --- E1/w3/C run=unif-r1 dist=uniform rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.68  p90=9.08  p95=9.98  p99=13.03  p99.9=20.16  max=26.76
+  amplificacao: 105.14 queries no datastore por requisicao
+  saida       : results/E1/w3/C-unif-r1
+
+[22:41:02Z] !! CONTAMINACAO POSSIVEL apos E1/w3/C/unif-r1:
+64m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6     0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:41:07Z] --- E1/w1/A run=unif-r2 dist=uniform rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.81  p90=8.19  p95=9.55  p99=14.63  p99.9=18.23  max=19.64
+  amplificacao: 124.04 queries no datastore por requisicao
+  saida       : results/E1/w1/A-unif-r2
+
+[22:42:53Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/unif-r2:
+66m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6     0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:43:18Z] --- E1/w1/B run=unif-r2 dist=uniform rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=5.97  p90=17.59  p95=20.03  p99=24.75  p99.9=28.71  max=35.38
+  amplificacao: 129.01 queries no datastore por requisicao
+  pgcache     : 273408 hits / 28561 misses (90.5% hit ratio)
+  saida       : results/E1/w1/B-unif-r2
+
+[22:45:04Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/unif-r2:
+68m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6     0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:45:10Z] --- E1/w1/C run=unif-r2 dist=uniform rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.01  p90=9.74  p95=11.69  p99=17.63  p99.9=23.54  max=27.39
+  amplificacao: 80.16 queries no datastore por requisicao
+  saida       : results/E1/w1/C-unif-r2
+
+[22:46:59Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/unif-r2:
+70m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6     0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:47:04Z] --- E1/w3/A run=unif-r2 dist=uniform rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=6.01  p90=8.25  p95=8.92  p99=10.94  p99.9=18.06  max=20.09
+  amplificacao: 170.24 queries no datastore por requisicao
+  saida       : results/E1/w3/A-unif-r2
+
+[22:48:50Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/unif-r2:
+71m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6     0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:49:15Z] --- E1/w3/B run=unif-r2 dist=uniform rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[22:49:16Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/unif-r2:
+72m         Warning   FailedScheduling    pod/pgcache-6dd9b6b6b9-k66g6     0/6 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 3 Insufficient cpu, 3 Insufficient memory. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[22:49:21Z] --- E1/w3/C run=unif-r2 dist=uniform rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.65  p90=9.20  p95=9.95  p99=13.24  p99.9=21.64  max=23.51
+  amplificacao: 105.40 queries no datastore por requisicao
+  saida       : results/E1/w3/C-unif-r2
+
+[22:51:12Z] --- E1/w1/A run=unif-r3 dist=uniform rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.69  p90=8.05  p95=9.53  p99=13.78  p99.9=18.51  max=19.93
+  amplificacao: 123.97 queries no datastore por requisicao
+  saida       : results/E1/w1/A-unif-r3
+
+[22:53:16Z] --- E1/w1/B run=unif-r3 dist=uniform rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=5.97  p90=17.69  p95=19.99  p99=25.28  p99.9=29.87  max=31.84
+  amplificacao: 130.14 queries no datastore por requisicao
+  pgcache     : 276136 hits / 28641 misses (90.6% hit ratio)
+  saida       : results/E1/w1/B-unif-r3
+
+[22:55:08Z] --- E1/w1/C run=unif-r3 dist=uniform rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.03  p90=9.72  p95=12.02  p99=19.40  p99.9=23.72  max=24.95
+  amplificacao: 80.38 queries no datastore por requisicao
+  saida       : results/E1/w1/C-unif-r3
+
+[22:56:59Z] --- E1/w3/A run=unif-r3 dist=uniform rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=6.02  p90=8.27  p95=9.06  p99=11.15  p99.9=17.10  max=18.53
+  amplificacao: 170.24 queries no datastore por requisicao
+  saida       : results/E1/w3/A-unif-r3
+
+[22:59:05Z] --- E1/w3/B run=unif-r3 dist=uniform rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=12.19  p90=19.02  p95=19.93  p99=22.33  p99.9=25.89  max=58.63
+  amplificacao: 170.24 queries no datastore por requisicao
+  pgcache     : 366827 hits / 40592 misses (90.0% hit ratio)
+  saida       : results/E1/w3/B-unif-r3
+
+[23:00:57Z] --- E1/w3/C run=unif-r3 dist=uniform rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.64  p90=9.18  p95=9.90  p99=12.90  p99.9=19.68  max=23.06
+  amplificacao: 105.25 queries no datastore por requisicao
+  saida       : results/E1/w3/C-unif-r3
+
+[23:02:49Z] ######## FASE 3 — E1 · networkMode=cni ########
+[23:04:04Z] -- repovoando o pod loadgen
+BUILD_OK
+[23:04:19Z] ==== SEED E1 ====
+store=01KZ2BH6KHQA8A8G5F81R7KQ8Y model=01KZ2BH6KN93PZVMYDF8S5F2GY degrau=E1 tuplas_previstas=84598
+emitidas 84598 tuplas para o degrau E1
+COPY 84598
+SEED_OK
+[23:04:23Z] -- reiniciando PgCache (cache frio pos-seed) e openfga-b
+[23:04:58Z] -- validando massa contra o oraculo
+verificacao do degrau E1 (http://openfga-a.pgcache-lab.svc.cluster.local:8080)
+  positivos confirmados: 300   divergentes: 0
+  negativos confirmados: 300   divergentes: 0
+  erros de transporte:   0
+  OK — oraculo e OpenFGA concordam em 100% da amostra.
+[23:05:03Z] -- gate de correcao W7 (A vs B)
+W7 — correcao diferencial (http://openfga-a.pgcache-lab.svc.cluster.local:8080 vs http://openfga-b.pgcache-lab.svc.cluster.local:8090)
+  amostras comparadas : 4000
+  concordancia A==B   : 4000 (100.000000%)
+  divergencias        : 0
+  A bate com oraculo  : 4000 (100.000000%)
+  B bate com oraculo  : 4000 (100.000000%)
+  erros de transporte : 0
+  OK — nenhuma divergencia de decisao.
+[23:06:10Z] --- E1/w1/A run=cni-r1 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.33  p90=7.98  p95=9.47  p99=13.29  p99.9=18.87  max=19.93
+  amplificacao: 108.86 queries no datastore por requisicao
+  saida       : results/E1/w1/A-cni-r1
+
+[23:08:20Z] --- E1/w1/B run=cni-r1 dist=zipf rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=5.51  p90=15.05  p95=18.60  p99=23.71  p99.9=27.93  max=31.16
+  amplificacao: 112.08 queries no datastore por requisicao
+  pgcache     : 237627 hits / 25098 misses (90.4% hit ratio)
+  saida       : results/E1/w1/B-cni-r1
+
+[23:10:12Z] --- E1/w1/C run=cni-r1 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.65  p90=9.16  p95=10.81  p99=16.15  p99.9=22.83  max=24.58
+  amplificacao: 69.15 queries no datastore por requisicao
+  saida       : results/E1/w1/C-cni-r1
+
+[23:12:03Z] --- E1/w3/A run=cni-r1 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.32  p90=7.59  p95=8.66  p99=10.15  p99.9=12.52  max=16.42
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-cni-r1
+
+[23:14:13Z] --- E1/w3/B run=cni-r1 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=9.31  p90=18.16  p95=20.72  p99=25.04  p99.9=30.63  max=37.71
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268441 hits / 30037 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-cni-r1
+
+[23:16:06Z] --- E1/w3/C run=cni-r1 dist=zipf rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.61  p90=8.07  p95=9.09  p99=11.07  p99.9=13.87  max=20.39
+  amplificacao: 71.74 queries no datastore por requisicao
+  saida       : results/E1/w3/C-cni-r1
+
+[23:17:57Z] --- E1/w1/A run=cni-r2 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.34  p90=8.03  p95=9.26  p99=13.46  p99.9=18.36  max=28.68
+  amplificacao: 108.56 queries no datastore por requisicao
+  saida       : results/E1/w1/A-cni-r2
+
+[23:20:03Z] --- E1/w1/B run=cni-r2 dist=zipf rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=5.56  p90=15.04  p95=18.86  p99=24.34  p99.9=30.11  max=32.94
+  amplificacao: 113.02 queries no datastore por requisicao
+  pgcache     : 239905 hits / 24950 misses (90.6% hit ratio)
+  saida       : results/E1/w1/B-cni-r2
+
+[23:21:55Z] --- E1/w1/C run=cni-r2 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.66  p90=9.27  p95=10.72  p99=16.30  p99.9=25.20  max=29.39
+  amplificacao: 68.20 queries no datastore por requisicao
+  saida       : results/E1/w1/C-cni-r2
+
+[23:23:46Z] --- E1/w3/A run=cni-r2 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.41  p90=7.44  p95=8.45  p99=10.32  p99.9=13.18  max=17.80
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-cni-r2
+
+[23:25:57Z] --- E1/w3/B run=cni-r2 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=9.25  p90=18.61  p95=21.14  p99=25.17  p99.9=31.66  max=40.41
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268458 hits / 30020 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-cni-r2
+
+[23:27:49Z] --- E1/w3/C run=cni-r2 dist=zipf rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.66  p90=8.10  p95=9.24  p99=10.95  p99.9=15.52  max=19.67
+  amplificacao: 71.72 queries no datastore por requisicao
+  saida       : results/E1/w3/C-cni-r2
+
+[23:29:40Z] --- E1/w1/A run=cni-r3 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.43  p90=7.92  p95=9.22  p99=13.09  p99.9=18.71  max=19.34
+  amplificacao: 108.28 queries no datastore por requisicao
+  saida       : results/E1/w1/A-cni-r3
+
+[23:31:50Z] --- E1/w1/B run=cni-r3 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[23:31:56Z] --- E1/w1/C run=cni-r3 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.59  p90=9.38  p95=10.94  p99=16.64  p99.9=23.48  max=25.23
+  amplificacao: 68.57 queries no datastore por requisicao
+  saida       : results/E1/w1/C-cni-r3
+
+[23:33:48Z] --- E1/w3/A run=cni-r3 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=5.35  p90=7.44  p95=8.44  p99=10.28  p99.9=13.66  max=18.04
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-cni-r3
+
+[23:35:52Z] --- E1/w3/B run=cni-r3 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=9.40  p90=18.32  p95=21.05  p99=25.46  p99.9=28.39  max=32.84
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268438 hits / 30040 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-cni-r3
+
+[23:37:44Z] --- E1/w3/C run=cni-r3 dist=zipf rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.63  p90=8.16  p95=9.21  p99=10.91  p99.9=14.31  max=20.89
+  amplificacao: 71.64 queries no datastore por requisicao
+  saida       : results/E1/w3/C-cni-r3
+
+[23:39:35Z] -- voltando para bare
+[23:41:35Z] ######## FASE 4 — E2 (1,0 M tuplas) · bare ########
+[23:41:35Z] ==== SEED E2 ====
+store=01KZ2DNEM302B26QH6F6249SYW model=01KZ2DNEM8DRG3H7Z40A6M5XTE degrau=E2 tuplas_previstas=1023498
+emitidas 1023498 tuplas para o degrau E2
+COPY 1023498
+SEED_OK
+[23:42:00Z] -- reiniciando PgCache (cache frio pos-seed) e openfga-b
+[23:44:02Z] -- validando massa contra o oraculo
+verificacao do degrau E2 (http://openfga-a.pgcache-lab.svc.cluster.local:8080)
+  positivos confirmados: 300   divergentes: 0
+  negativos confirmados: 300   divergentes: 0
+  erros de transporte:   0
+  OK — oraculo e OpenFGA concordam em 100% da amostra.
+[23:44:08Z] -- gate de correcao W7 (A vs B)
+W7 — correcao diferencial (http://openfga-a.pgcache-lab.svc.cluster.local:8080 vs http://openfga-b.pgcache-lab.svc.cluster.local:8090)
+  amostras comparadas : 4000
+  concordancia A==B   : 4000 (100.000000%)
+  divergencias        : 0
+  A bate com oraculo  : 4000 (100.000000%)
+  B bate com oraculo  : 4000 (100.000000%)
+  erros de transporte : 0
+  OK — nenhuma divergencia de decisao.
+[23:44:58Z] --- E2/w1/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w1 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.27  p90=8.56  p95=11.48  p99=25.61  p99.9=65.41  max=97.86
+  amplificacao: 134.53 queries no datastore por requisicao
+  saida       : results/E2/w1/A-bare-r1
+
+[23:46:44Z] !! CONTAMINACAO POSSIVEL apos E2/w1/A/bare-r1:
+4m25s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+3m38s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+3m35s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:47:08Z] --- E2/w1/B run=bare-r1 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[23:47:09Z] !! CONTAMINACAO POSSIVEL apos E2/w1/B/bare-r1:
+4m50s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+4m3s        Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+3m59s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:47:14Z] --- E2/w1/C run=bare-r1 dist=zipf rate=40
+
+── appcache / w1 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.95  p90=10.47  p95=14.69  p99=40.06  p99.9=103.80  max=117.03
+  amplificacao: 97.64 queries no datastore por requisicao
+  saida       : results/E2/w1/C-bare-r1
+
+[23:48:59Z] !! CONTAMINACAO POSSIVEL apos E2/w1/C/bare-r1:
+6m40s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+5m54s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+5m50s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:49:05Z] --- E2/w3/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.77  p90=7.22  p95=8.25  p99=10.93  p99.9=26.80  max=70.72
+  amplificacao: 128.24 queries no datastore por requisicao
+  saida       : results/E2/w3/A-bare-r1
+
+[23:50:50Z] !! CONTAMINACAO POSSIVEL apos E2/w3/A/bare-r1:
+7m41s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+7m45s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+8m31s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:51:14Z] --- E2/w3/B run=bare-r1 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[23:51:15Z] !! CONTAMINACAO POSSIVEL apos E2/w3/B/bare-r1:
+8m56s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+8m6s        Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+8m10s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:51:21Z] --- E2/w3/C run=bare-r1 dist=zipf rate=40
+
+── appcache / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.56  p90=7.97  p95=9.50  p99=12.00  p99.9=37.32  max=85.26
+  amplificacao: 84.07 queries no datastore por requisicao
+  saida       : results/E2/w3/C-bare-r1
+
+[23:53:06Z] !! CONTAMINACAO POSSIVEL apos E2/w3/C/bare-r1:
+10m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+9m57s       Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+10m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:53:12Z] --- E2/w1/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w1 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.22  p90=8.81  p95=11.54  p99=26.62  p99.9=76.94  max=88.52
+  amplificacao: 137.01 queries no datastore por requisicao
+  saida       : results/E2/w1/A-bare-r2
+
+[23:54:58Z] !! CONTAMINACAO POSSIVEL apos E2/w1/A/bare-r2:
+11m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+11m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+12m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:55:21Z] --- E2/w1/B run=bare-r2 dist=zipf rate=40
+
+── pgcache / w1 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=6.03  p90=24.94  p95=33.66  p99=52.19  p99.9=137.58  max=188.33
+  amplificacao: 132.86 queries no datastore por requisicao
+  pgcache     : 264875 hits / 42060 misses (86.3% hit ratio)
+  saida       : results/E2/w1/B-bare-r2
+
+[23:57:08Z] !! CONTAMINACAO POSSIVEL apos E2/w1/B/bare-r2:
+13m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+14m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+14m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:57:13Z] --- E2/w1/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w1 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.92  p90=10.57  p95=14.68  p99=37.46  p99.9=98.64  max=122.25
+  amplificacao: 97.70 queries no datastore por requisicao
+  saida       : results/E2/w1/C-bare-r2
+
+[23:58:59Z] !! CONTAMINACAO POSSIVEL apos E2/w1/C/bare-r2:
+15m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+15m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+16m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[23:59:05Z] --- E2/w3/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.79  p90=7.23  p95=8.50  p99=11.18  p99.9=27.24  max=65.38
+  amplificacao: 128.24 queries no datastore por requisicao
+  saida       : results/E2/w3/A-bare-r2
+
+[00:00:51Z] !! CONTAMINACAO POSSIVEL apos E2/w3/A/bare-r2:
+17m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+17m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+18m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:01:15Z] --- E2/w3/B run=bare-r2 dist=zipf rate=40
+
+── pgcache / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=13.87  p90=29.51  p95=35.23  p99=53.01  p99.9=226.76  max=427.83
+  amplificacao: 128.24 queries no datastore por requisicao
+  pgcache     : 263430 hits / 44002 misses (85.7% hit ratio)
+  saida       : results/E2/w3/B-bare-r2
+
+[00:03:02Z] !! CONTAMINACAO POSSIVEL apos E2/w3/B/bare-r2:
+19m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+19m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+20m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:03:08Z] --- E2/w3/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.55  p90=8.10  p95=9.39  p99=12.19  p99.9=38.81  max=92.72
+  amplificacao: 84.26 queries no datastore por requisicao
+  saida       : results/E2/w3/C-bare-r2
+
+[00:04:58Z] !! CONTAMINACAO POSSIVEL apos E2/w3/C/bare-r2:
+21m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+22m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+21m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:05:04Z] --- E2/w1/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w1 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.34  p90=8.73  p95=11.26  p99=27.42  p99.9=71.12  max=84.40
+  amplificacao: 138.53 queries no datastore por requisicao
+  saida       : results/E2/w1/A-bare-r3
+
+[00:06:49Z] !! CONTAMINACAO POSSIVEL apos E2/w1/A/bare-r3:
+24m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+23m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+23m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:07:14Z] --- E2/w1/B run=bare-r3 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[00:07:14Z] !! CONTAMINACAO POSSIVEL apos E2/w1/B/bare-r3:
+24m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+24m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+23m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:07:20Z] --- E2/w1/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w1 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.89  p90=10.79  p95=15.01  p99=37.33  p99.9=70.81  max=123.69
+  amplificacao: 96.33 queries no datastore por requisicao
+  saida       : results/E2/w1/C-bare-r3
+
+[00:09:05Z] !! CONTAMINACAO POSSIVEL apos E2/w1/C/bare-r3:
+26m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+26m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+25m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:09:11Z] --- E2/w3/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.76  p90=7.40  p95=8.63  p99=11.27  p99.9=26.25  max=67.12
+  amplificacao: 128.24 queries no datastore por requisicao
+  saida       : results/E2/w3/A-bare-r3
+
+[00:10:56Z] !! CONTAMINACAO POSSIVEL apos E2/w3/A/bare-r3:
+28m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+27m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+27m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:11:19Z] --- E2/w3/B run=bare-r3 dist=zipf rate=40
+
+── pgcache / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=13.57  p90=30.04  p95=34.91  p99=49.83  p99.9=157.55  max=428.83
+  amplificacao: 128.24 queries no datastore por requisicao
+  pgcache     : 263258 hits / 44193 misses (85.6% hit ratio)
+  saida       : results/E2/w3/B-bare-r3
+
+[00:13:06Z] !! CONTAMINACAO POSSIVEL apos E2/w3/B/bare-r3:
+30m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+30m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+29m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:13:11Z] --- E2/w3/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w3 / degrau E2 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.59  p90=8.09  p95=9.47  p99=12.11  p99.9=34.92  max=90.64
+  amplificacao: 83.96 queries no datastore por requisicao
+  saida       : results/E2/w3/C-bare-r3
+
+[00:14:57Z] !! CONTAMINACAO POSSIVEL apos E2/w3/C/bare-r3:
+32m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+31m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+31m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:15:02Z] ######## FASE 5 — rampa de taxa em E1 (W1) ########
+[00:15:02Z] --- E1/w1/A run=ramp20 dist=zipf rate=20
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 1200 (erros 1200, descartes 1)
+  taxa        : 20 rps alvo -> 20 rps alcancado
+  allowed/den : 0 / 0
+  latencia ms : p50=0.00  p90=0.00  p95=0.00  p99=0.00  p99.9=0.00  max=0.00
+  saida       : results/E1/w1/A-ramp20
+
+[00:16:48Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/ramp20:
+34m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+33m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+33m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:17:12Z] --- E1/w1/B run=ramp20 dist=zipf rate=20
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 1200 (erros 1200, descartes 1)
+  taxa        : 20 rps alvo -> 20 rps alcancado
+  allowed/den : 0 / 0
+  latencia ms : p50=0.00  p90=0.00  p95=0.00  p99=0.00  p99.9=0.00  max=0.00
+  pgcache     : 1200 hits / 0 misses (100.0% hit ratio)
+  saida       : results/E1/w1/B-ramp20
+
+[00:18:58Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/ramp20:
+36m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+35m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+35m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:19:03Z] --- E1/w1/C run=ramp20 dist=zipf rate=20
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 1200 (erros 1200, descartes 1)
+  taxa        : 20 rps alvo -> 20 rps alcancado
+  allowed/den : 0 / 0
+  latencia ms : p50=0.00  p90=0.00  p95=0.00  p99=0.00  p99.9=0.00  max=0.00
+  saida       : results/E1/w1/C-ramp20
+
+[00:20:49Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/ramp20:
+38m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+37m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+37m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:20:54Z] --- E1/w1/A run=ramp80 dist=zipf rate=80
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 4800 (erros 4800, descartes 1)
+  taxa        : 80 rps alvo -> 80 rps alcancado
+  allowed/den : 0 / 0
+  latencia ms : p50=0.00  p90=0.00  p95=0.00  p99=0.00  p99.9=0.00  max=0.00
+  saida       : results/E1/w1/A-ramp80
+
+[00:22:40Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/ramp80:
+40m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+39m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+39m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:23:03Z] --- E1/w1/B run=ramp80 dist=zipf rate=80
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 4800 (erros 4800, descartes 1)
+  taxa        : 80 rps alvo -> 80 rps alcancado
+  allowed/den : 0 / 0
+  latencia ms : p50=0.00  p90=0.00  p95=0.00  p99=0.00  p99.9=0.00  max=0.00
+  pgcache     : 4800 hits / 0 misses (100.0% hit ratio)
+  saida       : results/E1/w1/B-ramp80
+
+[00:24:49Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/ramp80:
+42m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+41m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+41m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn    0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:24:54Z] --- E1/w1/C run=ramp80 dist=zipf rate=80
+erro: alvo http://openfga-c.pgcache-lab.svc.cluster.local:8100 nao responde: healthz -> 500
+command terminated with exit code 1
+[00:24:55Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/ramp80:
+41m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+41m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+42m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:24:55Z] !! 7 pod(s) fora de 1/1 Running apos E1/w1/C/ramp80
+[00:25:00Z] --- E1/w1/A run=ramp160 dist=zipf rate=160
+erro: alvo http://openfga-a.pgcache-lab.svc.cluster.local:8080 nao responde: healthz -> 500
+command terminated with exit code 1
+[00:25:01Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/ramp160:
+41m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+41m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+42m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:25:01Z] !! 6 pod(s) fora de 1/1 Running apos E1/w1/A/ramp160
+[00:25:41Z] --- E1/w1/B run=ramp160 dist=zipf rate=160
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[00:25:42Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/ramp160:
+42m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+42m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+43m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:25:42Z] !! 1 pod(s) fora de 1/1 Running apos E1/w1/B/ramp160
+[00:25:47Z] --- E1/w1/C run=ramp160 dist=zipf rate=160
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 9600 (erros 9600, descartes 1)
+  taxa        : 160 rps alvo -> 160 rps alcancado
+  allowed/den : 0 / 0
+  latencia ms : p50=0.00  p90=0.00  p95=0.00  p99=0.00  p99.9=0.00  max=0.00
+  saida       : results/E1/w1/C-ramp160
+
+[00:27:33Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/ramp160:
+43m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+44m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+45m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn        0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:27:38Z] --- E1/w1/A run=ramp320 dist=zipf rate=320
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 19200 (erros 19200, descartes 1)
+  taxa        : 320 rps alvo -> 320 rps alcancado
+  allowed/den : 0 / 0
+  latencia ms : p50=0.00  p90=0.00  p95=0.00  p99=0.00  p99.9=0.00  max=0.00
+  saida       : results/E1/w1/A-ramp320
+

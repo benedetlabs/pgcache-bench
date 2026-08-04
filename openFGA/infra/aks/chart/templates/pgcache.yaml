@@ -1,0 +1,66 @@
+{{- $ns := .Release.Namespace -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgcache
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  {{- include "lab.serviceClusterIP" . | nindent 2 }}
+  selector: {app: pgcache}
+  ports:
+    - {name: sql, port: {{ .Values.pgcache.sqlPort }}, targetPort: {{ .Values.pgcache.sqlPort }}}
+    - {name: metrics, port: {{ .Values.pgcache.metricsPort }}, targetPort: {{ .Values.pgcache.metricsPort }}}
+---
+# A imagem embute um PostgreSQL 18 como store de cache. Consequencia que domina o
+# resultado: um HIT nao e' leitura de memoria, e' consulta SQL completa a esse
+# banco local. Contra uma origem que ja' serve de shared_buffers em ~0,009 ms, a
+# conta so' fecha quando o round-trip evitado for grande — dai' a topologia.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgcache
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # cache frio por construcao a cada rollout
+  selector: {matchLabels: {app: pgcache}}
+  template:
+    metadata:
+      labels:
+        app: pgcache
+        lab.benedet/role: {{ .Values.pgcache.nodeRole }}
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      {{- include "lab.podNetwork" . | nindent 6 }}
+      {{- include "lab.placement" (dict "root" . "role" .Values.pgcache.nodeRole) | nindent 6 }}
+      containers:
+        - name: pgcache
+          image: {{ .Values.images.pgcache }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          env:
+            - name: UPSTREAM_URL
+              value: postgres://{{ .Values.origin.user }}:{{ .Values.origin.password }}@origin.{{ $ns }}.svc.cluster.local:5432/{{ .Values.origin.database }}
+            - {name: LISTEN_PORT, value: {{ .Values.pgcache.sqlPort | quote }}}
+            - {name: METRICS_PORT, value: {{ .Values.pgcache.metricsPort | quote }}}
+            - {name: NUM_WORKERS, value: {{ .Values.pgcache.workers | quote }}}
+            - {name: ALLOWED_TABLES, value: {{ .Values.pgcache.allowedTables | quote }}}
+            {{- if .Values.pgcache.pinnedTables }}
+            - {name: PINNED_TABLES, value: {{ .Values.pgcache.pinnedTables | quote }}}
+            {{- end }}
+            {{- if .Values.pgcache.admissionThreshold }}
+            - {name: ADMISSION_THRESHOLD, value: {{ .Values.pgcache.admissionThreshold | quote }}}
+            {{- end }}
+            - {name: PGCACHE_TELEMETRY, value: {{ .Values.pgcache.telemetry | quote }}}
+          ports:
+            - {containerPort: {{ .Values.pgcache.sqlPort }}, name: sql}
+            - {containerPort: {{ .Values.pgcache.metricsPort }}, name: metrics}
+          # requests apenas, sem limits — ver values.yaml. E sem mem_limit
+          # artificial: no lab local um limite acima da RAM fisica do host virou
+          # cgroup que nunca corta, o processo cresceu ate' esgotar a maquina e
+          # reiniciou no meio da janela, zerando os contadores. Aqui o envelope
+          # e' o proprio no'.
+          resources: {{- toYaml .Values.pgcache.resources | nindent 12 }}
+          readinessProbe:
+            tcpSocket: {port: {{ .Values.pgcache.sqlPort }}}
+            periodSeconds: 5
+            failureThreshold: 30

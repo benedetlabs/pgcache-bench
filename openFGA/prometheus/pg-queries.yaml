@@ -1,0 +1,43 @@
+pg_stat_statements:
+  query: |
+    SELECT
+      pg_get_userbyid(userid) AS user,
+      pg_database.datname,
+      pg_stat_statements.queryid,
+      left(pg_stat_statements.query, 120) AS short_query,
+      pg_stat_statements.calls,
+      pg_stat_statements.total_exec_time / 1000.0 AS seconds_total,
+      pg_stat_statements.rows,
+      pg_stat_statements.shared_blks_hit,
+      pg_stat_statements.shared_blks_read
+    FROM pg_stat_statements
+    JOIN pg_database ON pg_database.oid = pg_stat_statements.dbid
+    WHERE calls > 10
+    ORDER BY total_exec_time DESC
+    LIMIT 60
+  metrics:
+    - user:        { usage: "LABEL" }
+    - datname:     { usage: "LABEL" }
+    - queryid:     { usage: "LABEL" }
+    - short_query: { usage: "LABEL" }
+    - calls:              { usage: "COUNTER", description: "Numero de execucoes" }
+    - seconds_total:      { usage: "COUNTER", description: "Tempo total de execucao (s)" }
+    - rows:               { usage: "COUNTER", description: "Linhas retornadas" }
+    - shared_blks_hit:    { usage: "COUNTER", description: "Blocos servidos do shared_buffers" }
+    - shared_blks_read:   { usage: "COUNTER", description: "Blocos lidos do disco/SO" }
+
+pg_table_size:
+  query: |
+    SELECT relname AS table_name,
+           pg_total_relation_size(c.oid) AS bytes,
+           n_live_tup AS live_rows,
+           seq_scan, idx_scan
+    FROM pg_stat_user_tables s
+    JOIN pg_class c ON c.relname = s.relname
+    WHERE schemaname = 'public'
+  metrics:
+    - table_name: { usage: "LABEL" }
+    - bytes:      { usage: "GAUGE", description: "Tamanho total da relacao" }
+    - live_rows:  { usage: "GAUGE", description: "Linhas vivas estimadas" }
+    - seq_scan:   { usage: "COUNTER" }
+    - idx_scan:   { usage: "COUNTER" }

@@ -1,0 +1,376 @@
+{
+  "spike": "strapi/R1+R1b",
+  "subject": "strapi",
+  "startedAt": "2026-08-03T13:58:32.572Z",
+  "finishedAt": "2026-08-03T13:59:18.394Z",
+  "config": {
+    "pgcacheEndpoint": "pgcache:6432",
+    "originEndpoint": "origin:5432",
+    "metricsUrl": "http://pgcache:9090/metrics",
+    "driver": "node-postgres (pg) 8.20.0 — the version in Strapi yarn.lock, STUDY §5",
+    "probeId": 17,
+    "windowIters": 25,
+    "warmTimeoutMs": 30000
+  },
+  "metricNames": {
+    "resolved": {
+      "cacheHit": "pgcache_queries_cache_hit",
+      "cacheMiss": "pgcache_queries_cache_miss",
+      "cacheError": "pgcache_queries_cache_error",
+      "queriesTotal": "pgcache_queries_total",
+      "cacheable": "pgcache_queries_cacheable",
+      "uncacheable": "pgcache_queries_uncacheable",
+      "unsupported": "pgcache_queries_unsupported",
+      "invalid": "pgcache_queries_invalid",
+      "allowlistSkipped": "pgcache_queries_allowlist_skipped",
+      "extended": "pgcache_protocol_extended_queries",
+      "simple": "pgcache_protocol_simple_queries",
+      "prepared": "pgcache_protocol_prepared_statements"
+    },
+    "missing": []
+  },
+  "checks": {
+    "originDirect": {
+      "verdict": "PASS",
+      "outOfTransactionRows": [
+        {
+          "id": 17,
+          "title": "art-17",
+          "views": 407937
+        }
+      ],
+      "inTransactionRows": [
+        {
+          "id": 17,
+          "title": "art-17",
+          "slug": "art-17"
+        }
+      ],
+      "joinRowCount": 3
+    },
+    "protocolCounterControl": {
+      "simple": 1,
+      "extended": 0
+    },
+    "R1": {
+      "verdict": "PASS",
+      "error": null,
+      "rows": [
+        {
+          "id": 17,
+          "title": "art-17",
+          "views": 407937
+        }
+      ],
+      "expected": [
+        {
+          "id": 17,
+          "title": "art-17",
+          "views": 407937
+        }
+      ],
+      "meaningIfFail": "PgCache cannot parse the extended query protocol. node-postgres has no simple-protocol switch and knex parameterizes every query (STUDY §5), so ~100% of Strapi's SQL would be invisible to the cache. SUBJECT DISQUALIFIED."
+    },
+    "R1a": {
+      "verdict": "PASS",
+      "cacheHit": 25,
+      "cacheMiss": 0,
+      "allowlistSkipped": 0,
+      "originCallsDelta": 0,
+      "meaningIfFail": "The transaction question cannot be asked yet. Suspect ALLOWED_TABLES (must list `articles`), a DISK_LIMIT that was set (openFGA/docker-compose.yml:158-161 — it is compared against TOTAL filesystem usage and silently refuses every registration), ADMISSION_THRESHOLD, or a failed replication slot (STUDY risk R1c)."
+    },
+    "R1b": {
+      "verdict": "FAIL",
+      "mode": "passthrough_in_transaction",
+      "message": "PgCache PASSED THROUGH every read inside BEGIN…COMMIT (0/25 virgin, 0/25 pre-warmed) while caching the IDENTICAL statement out of transaction (25/25). The transaction is the only difference, so the attribution is clean.",
+      "rowsCorrect": true,
+      "inTransactionVirgin": {
+        "cacheHit": 0,
+        "cacheMiss": 0,
+        "originCallsDelta": 25,
+        "iterations": 25
+      },
+      "outOfTransactionControl": {
+        "cacheHit": 25,
+        "cacheMiss": 0,
+        "originCallsDelta": 0,
+        "iterations": 25
+      },
+      "inTransactionPreWarmed": {
+        "cacheHit": 0,
+        "cacheMiss": 0,
+        "originCallsDelta": 25,
+        "iterations": 25
+      },
+      "ceilingIfFail": {
+        "statement": "If in-transaction reads are not served from cache, the unconditionally cacheable surface is exactly the 5 out-of-transaction auth statements A1, A2, A3, A4a, A4b (1 statement — A5 — for anonymous requests). STUDY §4 and §1.",
+        "fractions": {
+          "W1 authed findOne (7 stmts)": "5/7 = 71%",
+          "W1L locale-pinned (6 stmts)": "5/6 = 83%",
+          "W1a anonymous (3 stmts)": "1/3 = 33%",
+          "authed list, no populate (9 stmts)": "5/9 = 56%",
+          "W3 populated list (14 stmts)": "5/14 = 36%"
+        },
+        "expectedSign": "STUDY §1: those 5 statements are warm-buffer PK lookups on tiny near-static tables. Substituting an embedded-Postgres round-trip for a shared_buffers hit is the mechanism that sank the openFGA campaign, so the expected sign is plausibly NEGATIVE, not merely small. It can only go positive if PgCache is co-located with the app and the origin carries meaningful RTT. HUMAN DECISION REQUIRED."
+      }
+    }
+  },
+  "phases": [
+    {
+      "name": "P1 Q_OUT out-of-transaction",
+      "inTransaction": false,
+      "statement": "SELECT id, title, views FROM articles WHERE id = $1",
+      "iterations": 25,
+      "error": null,
+      "cacheHit": 25,
+      "cacheMiss": 0,
+      "cacheError": 0,
+      "cacheable": 25,
+      "uncacheable": 0,
+      "unsupported": 0,
+      "invalid": 0,
+      "allowlistSkipped": 0,
+      "extendedProtocol": 25,
+      "simpleProtocol": 0,
+      "preparedStatements": 0,
+      "originCallsDelta": 0,
+      "allChangedPgcacheCounters": {
+        "pgcache_cache_memo_hits": 24,
+        "pgcache_queries_cache_hit": 25,
+        "pgcache_protocol_extended_queries": 25,
+        "pgcache_queries_cacheable": 25,
+        "pgcache_cache_memo_captures": 1,
+        "pgcache_queries_total": 25,
+        "pgcache_connections_total": 1,
+        "pgcache_cache_memory_used_bytes": 471040,
+        "pgcache_cache_queries_registered": 1,
+        "pgcache_cache_writer_update_queries_total": 1,
+        "pgcache_cache_tables_tracked": 1,
+        "pgcache_cache_generation": 1,
+        "pgcache_cache_memo_bytes": 123,
+        "pgcache_cdc_applied_lsn": 21184,
+        "pgcache_cache_writer_update_queries_max_per_relation": 1,
+        "pgcache_cache_disk_used_bytes": 2875392,
+        "pgcache_cache_disk_available_bytes": -2875392,
+        "pgcache_cache_memo_entries": 1,
+        "pgcache_cdc_received_lsn": 21184,
+        "pgcache_query_stage_total_seconds": -0.0026345698606379747,
+        "pgcache_query_stage_total_seconds_sum": 0.0043837540000000105,
+        "pgcache_query_stage_total_seconds_count": 25,
+        "pgcache_query_stage_queue_wait_seconds": -0.0015317191846319995,
+        "pgcache_query_stage_queue_wait_seconds_sum": 0.000010457999999999973,
+        "pgcache_query_stage_queue_wait_seconds_count": 1,
+        "pgcache_query_stage_spawn_wait_seconds_sum": 0.000007749999999999999,
+        "pgcache_query_stage_spawn_wait_seconds_count": 1,
+        "pgcache_query_stage_parse_seconds": 0.00007254017030127333,
+        "pgcache_query_stage_parse_seconds_sum": 0.000741126,
+        "pgcache_query_stage_parse_seconds_count": 25,
+        "pgcache_query_cache_latency_seconds": -0.003768627068058421,
+        "pgcache_query_cache_latency_seconds_sum": 0.007710917000000001,
+        "pgcache_query_cache_latency_seconds_count": 25,
+        "pgcache_query_stage_worker_exec_seconds": -0.00045407801103312505,
+        "pgcache_query_stage_worker_exec_seconds_sum": 0.001418292,
+        "pgcache_query_stage_worker_exec_seconds_count": 1,
+        "pgcache_cache_writer_command_handle_seconds": 3.352065683082106e-7,
+        "pgcache_cache_writer_command_handle_seconds_sum": 0.000004707999999999102,
+        "pgcache_cache_writer_command_handle_seconds_count": 2,
+        "pgcache_query_stage_response_write_seconds": -0.000014507762981536392,
+        "pgcache_query_stage_response_write_seconds_sum": 0.00005541899999999992,
+        "pgcache_query_stage_response_write_seconds_count": 25,
+        "pgcache_query_stage_dispatch_seconds": 0.000018960125968342018,
+        "pgcache_query_stage_dispatch_seconds_sum": 0.00022037600000000005,
+        "pgcache_query_stage_dispatch_seconds_count": 25,
+        "pgcache_query_stage_conn_wait_seconds_sum": 0.000001083,
+        "pgcache_query_stage_conn_wait_seconds_count": 1,
+        "pgcache_query_stage_lookup_seconds": 0.00013965836667200114,
+        "pgcache_query_stage_lookup_seconds_sum": 0.0011421219999999998,
+        "pgcache_query_stage_lookup_seconds_count": 25,
+        "pgcache_cache_lookup_latency_seconds": 0.000011581176817388557,
+        "pgcache_cache_lookup_latency_seconds_sum": 0.00009504300000000002,
+        "pgcache_cache_lookup_latency_seconds_count": 25
+      }
+    },
+    {
+      "name": "P2 Q_TX inside transaction (virgin)",
+      "inTransaction": true,
+      "statement": "SELECT id, title, slug FROM articles WHERE id = $1",
+      "iterations": 25,
+      "error": null,
+      "cacheHit": 0,
+      "cacheMiss": 0,
+      "cacheError": 0,
+      "cacheable": 0,
+      "uncacheable": 50,
+      "unsupported": 25,
+      "invalid": 0,
+      "allowlistSkipped": 0,
+      "extendedProtocol": 25,
+      "simpleProtocol": 50,
+      "preparedStatements": 0,
+      "originCallsDelta": 25,
+      "allChangedPgcacheCounters": {
+        "pgcache_queries_uncacheable": 50,
+        "pgcache_queries_total": 75,
+        "pgcache_connections_total": 1,
+        "pgcache_queries_unsupported": 25,
+        "pgcache_protocol_simple_queries": 50,
+        "pgcache_protocol_extended_queries": 25,
+        "pgcache_cache_disk_used_bytes": 45056,
+        "pgcache_cache_memory_used_bytes": 569344,
+        "pgcache_cache_rss_bytes": 12288,
+        "pgcache_cache_disk_available_bytes": -45056,
+        "pgcache_query_origin_latency_seconds": 0.0006468302454396232,
+        "pgcache_query_origin_latency_seconds_sum": 0.05017883000000001,
+        "pgcache_query_origin_latency_seconds_count": 75,
+        "pgcache_origin_execution_seconds": 0.0005149999081354097,
+        "pgcache_origin_execution_seconds_sum": 0.047422578000000076,
+        "pgcache_origin_execution_seconds_count": 75,
+        "pgcache_cache_writer_command_handle_seconds": 7.501048552016609e-7
+      }
+    },
+    {
+      "name": "P3 Q_TX out-of-transaction (control)",
+      "inTransaction": false,
+      "statement": "SELECT id, title, slug FROM articles WHERE id = $1",
+      "iterations": 25,
+      "error": null,
+      "cacheHit": 25,
+      "cacheMiss": 0,
+      "cacheError": 0,
+      "cacheable": 25,
+      "uncacheable": 0,
+      "unsupported": 0,
+      "invalid": 0,
+      "allowlistSkipped": 0,
+      "extendedProtocol": 25,
+      "simpleProtocol": 0,
+      "preparedStatements": 0,
+      "originCallsDelta": 0,
+      "allChangedPgcacheCounters": {
+        "pgcache_queries_cacheable": 25,
+        "pgcache_cache_memo_hits": 25,
+        "pgcache_connections_total": 1,
+        "pgcache_queries_cache_hit": 25,
+        "pgcache_queries_total": 25,
+        "pgcache_protocol_extended_queries": 25,
+        "pgcache_cache_memo_bytes": 122,
+        "pgcache_cache_writer_update_queries_max_per_relation": 1,
+        "pgcache_cache_memo_entries": 1,
+        "pgcache_cache_generation": 1,
+        "pgcache_cache_rss_bytes": 2359296,
+        "pgcache_cache_writer_update_queries_total": 1,
+        "pgcache_cache_memory_used_bytes": 2531328,
+        "pgcache_cache_queries_registered": 1,
+        "pgcache_query_stage_total_seconds": -0.0006213931363369656,
+        "pgcache_query_stage_total_seconds_sum": 0.002571002000000003,
+        "pgcache_query_stage_total_seconds_count": 25,
+        "pgcache_query_stage_parse_seconds": 0.000026374044594729116,
+        "pgcache_query_stage_parse_seconds_sum": 0.0005836269999999998,
+        "pgcache_query_stage_parse_seconds_count": 25,
+        "pgcache_query_cache_latency_seconds": -0.0007302910279841281,
+        "pgcache_query_cache_latency_seconds_sum": 0.005663164999999998,
+        "pgcache_query_cache_latency_seconds_count": 25,
+        "pgcache_query_stage_response_write_seconds": -0.000007250660296612295,
+        "pgcache_query_stage_response_write_seconds_sum": 0.0000011279999999999526,
+        "pgcache_query_stage_response_write_seconds_count": 25,
+        "pgcache_query_stage_dispatch_seconds": -8.515646376742179e-8,
+        "pgcache_query_stage_dispatch_seconds_sum": 0.00012349900000000003,
+        "pgcache_query_stage_dispatch_seconds_count": 25,
+        "pgcache_query_stage_lookup_seconds": 0.00009981100374425856,
+        "pgcache_query_stage_lookup_seconds_sum": 0.0014623320000000002,
+        "pgcache_query_stage_lookup_seconds_count": 25,
+        "pgcache_cache_lookup_latency_seconds": -1.6602052073755445e-7,
+        "pgcache_cache_lookup_latency_seconds_sum": 0.00006941799999999999,
+        "pgcache_cache_lookup_latency_seconds_count": 25
+      }
+    },
+    {
+      "name": "P4 Q_TX inside transaction (pre-warmed)",
+      "inTransaction": true,
+      "statement": "SELECT id, title, slug FROM articles WHERE id = $1",
+      "iterations": 25,
+      "error": null,
+      "cacheHit": 0,
+      "cacheMiss": 0,
+      "cacheError": 0,
+      "cacheable": 0,
+      "uncacheable": 50,
+      "unsupported": 25,
+      "invalid": 0,
+      "allowlistSkipped": 0,
+      "extendedProtocol": 25,
+      "simpleProtocol": 50,
+      "preparedStatements": 0,
+      "originCallsDelta": 25,
+      "allChangedPgcacheCounters": {
+        "pgcache_queries_total": 75,
+        "pgcache_protocol_extended_queries": 25,
+        "pgcache_queries_unsupported": 25,
+        "pgcache_queries_uncacheable": 50,
+        "pgcache_protocol_simple_queries": 50,
+        "pgcache_cache_memory_used_bytes": 3153920,
+        "pgcache_cache_rss_bytes": 2916352,
+        "pgcache_cache_disk_used_bytes": 4096,
+        "pgcache_cache_disk_available_bytes": -4096,
+        "pgcache_query_origin_latency_seconds": 0.001411228977633689,
+        "pgcache_query_origin_latency_seconds_sum": 0.069482082,
+        "pgcache_query_origin_latency_seconds_count": 75,
+        "pgcache_origin_execution_seconds": 0.0013178213457362745,
+        "pgcache_origin_execution_seconds_sum": 0.061080127000000095,
+        "pgcache_origin_execution_seconds_count": 75
+      }
+    }
+  ],
+  "originTopStatements": [
+    {
+      "calls": "266",
+      "query": "SELECT id, title, slug FROM articles WHERE id = $1"
+    },
+    {
+      "calls": "180",
+      "query": "SELECT $2 FROM ONLY \"public\".\"articles\" x WHERE \"id\" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+    },
+    {
+      "calls": "2",
+      "query": "SELECT id, title, views FROM articles WHERE id = $1"
+    },
+    {
+      "calls": "1",
+      "query": "CREATE TABLE articles (\n    id    integer PRIMARY KEY,\n    title text    NOT NULL,\n    slug  text    NOT NULL,\n    views"
+    },
+    {
+      "calls": "1",
+      "query": "ALTER PUBLICATION pgcache_spike_pub SET TABLE public.articles"
+    },
+    {
+      "calls": "1",
+      "query": "CREATE INDEX articles_tags_lnk_article_fk ON articles_tags_lnk (article_id)"
+    },
+    {
+      "calls": "1",
+      "query": "DROP TABLE IF EXISTS articles CASCADE"
+    },
+    {
+      "calls": "1",
+      "query": "SELECT DISTINCT public.articles.id, public.articles.title, public.articles.slug, public.articles.views, public.articles."
+    },
+    {
+      "calls": "1",
+      "query": "INSERT INTO articles (id, title, slug, views, body)\nSELECT i,\n       $1 || i,\n       $2 || i,\n       ((i::bigint * $3) %"
+    },
+    {
+      "calls": "1",
+      "query": "SELECT a.id, a.title, l.tag_id FROM articles a JOIN articles_tags_lnk l ON l.article_id = a.id WHERE a.id = $1 ORDER BY "
+    },
+    {
+      "calls": "1",
+      "query": "CREATE TABLE articles_tags_lnk (\n    id         integer PRIMARY KEY,\n    article_id integer NOT NULL REFERENCES articles"
+    },
+    {
+      "calls": "1",
+      "query": "CREATE INDEX articles_tags_lnk_tag_fk     ON articles_tags_lnk (tag_id)"
+    }
+  ],
+  "exitCode": 3,
+  "notes": []
+}

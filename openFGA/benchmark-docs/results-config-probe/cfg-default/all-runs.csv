@@ -1,0 +1,2 @@
+run_id,path,path_name,rung,workload,rate_target,rate_achieved,requests,errors,dropped,allowed,denied,p50_ms,p90_ms,p95_ms,p99_ms,p999_ms,max_ms,mean_ms,queries_per_request,pgcache_hit_ratio,consistency,started_at,ended_at,doc_dist,warmup_s,campaign_id
+default-r1,B,pgcache,E1,w1,40,40.00,2400,0,1,2018,382,4.9859,13.1527,16.3088,22.5744,28.1498,40.9100,6.3990,108.9638,0.930371,MINIMIZE_LATENCY,2026-08-03T18:49:35.733539287Z,2026-08-03T18:50:35.736517471Z,zipf,150,cfg-default

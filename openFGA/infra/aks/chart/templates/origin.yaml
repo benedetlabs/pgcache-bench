@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: origin
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  {{- include "lab.serviceClusterIP" . | nindent 2 }}
+  selector: {app: origin}
+  ports: [{port: 5432, targetPort: 5432, name: postgres}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: origin
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  serviceName: origin
+  replicas: 1
+  selector: {matchLabels: {app: origin}}
+  template:
+    metadata:
+      labels:
+        app: origin
+        lab.benedet/role: {{ .Values.origin.nodeRole }}
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      {{- include "lab.podNetwork" . | nindent 6 }}
+      {{- include "lab.placement" (dict "root" . "role" .Values.origin.nodeRole) | nindent 6 }}
+      containers:
+        - name: postgres
+          image: {{ .Values.images.postgres }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          args:
+            - postgres
+            - -c
+            - wal_level=logical              # o CDC do PgCache depende disto
+            - -c
+            - max_wal_senders=10
+            - -c
+            - max_replication_slots=10
+            - -c
+            - shared_preload_libraries=pg_stat_statements
+            - -c
+            - pg_stat_statements.track=all
+            - -c
+            - shared_buffers={{ .Values.origin.sharedBuffers }}
+            - -c
+            - max_connections={{ .Values.origin.maxConnections }}
+            - -c
+            - work_mem=32MB
+            - -c
+            - maintenance_work_mem=512MB
+            - -c
+            - random_page_cost=1.1
+            - -c
+            - track_io_timing=on             # blks_read vs blks_hit no relatorio
+          env:
+            - {name: POSTGRES_USER, value: {{ .Values.origin.user | quote }}}
+            - {name: POSTGRES_DB, value: {{ .Values.origin.database | quote }}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-db, key: POSTGRES_PASSWORD}}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          ports: [{containerPort: 5432, name: postgres}]
+          resources: {{- toYaml .Values.origin.resources | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          # shared_preload_libraries carrega a lib, mas a EXTENSION precisa ser
+          # criada no banco. O docker-compose fazia isso via init-origin.sql, que
+          # nao foi portado — por isso o AKS nao tinha pg_stat_statements.
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh","-c","for i in $(seq 1 60); do pg_isready -U {{ .Values.origin.user }} -d {{ .Values.origin.database }} -q && break; sleep 2; done; psql -U {{ .Values.origin.user }} -d {{ .Values.origin.database }} -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements;' || true"]
+          readinessProbe:
+            exec: {command: [pg_isready, -U, {{ .Values.origin.user }}, -d, {{ .Values.origin.database }}]}
+            periodSeconds: 5
+            failureThreshold: 30
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.origin.storage.className }}
+        resources:
+          requests:
+            storage: {{ .Values.origin.storage.size }}

@@ -1,0 +1,282 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Lab de benchmark PgCache x OpenFGA
+#
+# Path A (baseline) : openfga-a -> origin:5432          caches do OpenFGA OFF
+# Path B (pgcache)  : openfga-b -> pgcache:6432 -> origin   caches do OpenFGA OFF
+# Path C (appcache) : openfga-c -> origin:5432          caches do OpenFGA ON
+#
+# Os tres apontam para a MESMA origem, com a MESMA massa. Rode UM path por vez
+# sob carga (os limites de CPU abaixo assumem isso).
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-openfga-common: &openfga-common
+  image: openfga/openfga:${OPENFGA_TAG:-latest}
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+  cpus: 2.0
+  mem_limit: 2g
+  healthcheck:
+    test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=127.0.0.1:8081"]
+    interval: 5s
+    timeout: 10s
+    retries: 12
+
+# Flags comuns a TODOS os paths. O que esta aqui e' controle experimental,
+# nao otimizacao. Ver PLAN.md secao 9.
+x-openfga-env: &openfga-env
+  OPENFGA_DATASTORE_ENGINE: postgres
+  # --experimentals NAO e' vazio por default (vem ["pipeline_list_objects"]).
+  OPENFGA_EXPERIMENTALS: ""
+  OPENFGA_LIST_OBJECTS_PIPELINE_ENABLED: "false"
+  # 3s default faria a run saturada medir timeout, nao latencia.
+  OPENFGA_REQUEST_TIMEOUT: 60s
+  OPENFGA_LISTOBJECTS_DEADLINE: 60s
+  OPENFGA_LISTUSERS_DEADLINE: 60s
+  # Teto real de concorrencia contra o banco. Igual nos tres paths.
+  OPENFGA_DATASTORE_MAX_OPEN_CONNS: "${FGA_MAX_CONNS:-50}"
+  OPENFGA_DATASTORE_MAX_IDLE_CONNS: "${FGA_MAX_CONNS:-50}"
+  OPENFGA_DATASTORE_CONN_MAX_IDLE_TIME: 30m
+  OPENFGA_DATASTORE_CONN_MAX_LIFETIME: 0s
+  OPENFGA_MAX_TUPLES_PER_WRITE: "100"
+  OPENFGA_RESOLVE_NODE_LIMIT: "25"
+  OPENFGA_RESOLVE_NODE_BREADTH_LIMIT: "10"
+  # Observabilidade
+  OPENFGA_METRICS_ENABLED: "true"
+  OPENFGA_METRICS_ADDR: "0.0.0.0:2112"
+  OPENFGA_METRICS_ENABLE_RPC_HISTOGRAMS: "true"
+  OPENFGA_DATASTORE_METRICS_ENABLED: "true"
+  OPENFGA_LOG_LEVEL: warn
+  OPENFGA_PLAYGROUND_ENABLED: "false"
+
+x-openfga-caches-off: &openfga-caches-off
+  OPENFGA_CHECK_QUERY_CACHE_ENABLED: "false"
+  OPENFGA_CHECK_ITERATOR_CACHE_ENABLED: "false"
+  OPENFGA_LIST_OBJECTS_ITERATOR_CACHE_ENABLED: "false"
+  OPENFGA_CACHE_CONTROLLER_ENABLED: "false"
+  OPENFGA_SHARED_ITERATOR_ENABLED: "false"
+
+services:
+
+  # ── Origem ────────────────────────────────────────────────────────────────
+  origin:
+    image: postgres:17
+    container_name: fga-origin
+    restart: unless-stopped
+    cpus: 3.0
+    mem_limit: 4g
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c pg_stat_statements.max=10000
+      -c shared_buffers=${ORIGIN_SHARED_BUFFERS:-1GB}
+      -c effective_cache_size=${ORIGIN_EFFECTIVE_CACHE:-2GB}
+      -c work_mem=32MB
+      -c maintenance_work_mem=512MB
+      -c max_connections=400
+      -c random_page_cost=1.1
+      -c track_io_timing=on
+      -c log_min_duration_statement=-1
+    environment:
+      POSTGRES_USER: fga
+      POSTGRES_PASSWORD: fgapass
+      POSTGRES_DB: openfga
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - origin-data:/var/lib/postgresql/data
+      - ./scripts/init-origin.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    ports: ["${PORT_ORIGIN:-15432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fga -d openfga"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # ── Migracoes do OpenFGA (roda uma vez, antes de tudo) ────────────────────
+  migrate:
+    image: openfga/openfga:${OPENFGA_TAG:-latest}
+    container_name: fga-migrate
+    depends_on:
+      origin: { condition: service_healthy }
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: "postgres://fga:fgapass@origin:5432/openfga?sslmode=disable"
+    restart: "no"
+
+  # ── PgCache ───────────────────────────────────────────────────────────────
+  # Imagem embute um PostgreSQL 18 como store local de cache. Nao precisa de
+  # cache-pg separado (diferente do que o lab do Mattermost assumia).
+  pgcache:
+    image: pgcache/pgcache:${PGCACHE_TAG:-latest}
+    container_name: fga-pgcache
+    restart: unless-stopped
+    # O PgCache hospeda proxy + um PostgreSQL 18 inteiro no mesmo container. Com
+    # `cpus: 2.0` ele tinha menos nucleos que a origem (3.0) para rodar MAIS
+    # trabalho, e em E3 bateu o teto:
+    #   fga-pgcache,202.07%,5.245GiB / 6GiB   <- CPU no limite, memoria quase
+    #   fga-b,0.94%,81.35MiB / 2GiB           <- OpenFGA ocioso, esperando
+    # (results/E3/w1/B-v3/docker-stats.csv). Enquanto o container estiver capado,
+    # o colapso do path B nao pode ser atribuido ao mecanismo de cache — nao e'
+    # comparacao de igual para igual.
+    #
+    # Teto de CPU agora >= o da origem. Se ainda saturar, a saturacao e' resultado.
+    #
+    # Memoria e' outra historia, e a primeira tentativa de correcao errou: subir o
+    # mem_limit para 8g numa maquina de 7,75 GiB deixa o limite ACIMA da RAM
+    # fisica, e um cgroup que nunca corta nao e' limite nenhum — o PgCache cresceu
+    # ate' esgotar a VM e reiniciou no meio da janela de medicao (contadores
+    # zerados, 197 erros em E1/w3/B). Medido em E1, com apenas 85 K tuplas:
+    # `fga-pgcache,5.12GiB / 7.75GiB`.
+    #
+    # O default tem de ser um teto REAL, abaixo da RAM do host, para que ele
+    # evicte em vez de estourar. Se o processo insistir acima disso, o cgroup o
+    # mata — e ai' isso e' resultado ("nao cabe nesta maquina"), nao ruido.
+    #
+    # O `6g` original sofria do mesmo problema nesta maquina: tambem estava acima
+    # do que o host podia ceder, entao a run de 25/07/2026 rodou efetivamente sem
+    # teto de memoria.
+    cpus: ${PGCACHE_CPUS:-4.0}
+    mem_limit: ${PGCACHE_MEM:-5g}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      UPSTREAM_URL: "postgres://fga:fgapass@origin:5432/openfga"
+      LISTEN_PORT: "6432"
+      METRICS_PORT: "9090"
+      NUM_WORKERS: "${PGCACHE_WORKERS:-4}"
+      # Exclui `changelog` do cache: e' a unica leitura volatil do OpenFGA
+      # (NOW() interpolado como texto). Ver PLAN.md secao 1.
+      ALLOWED_TABLES: "${PGCACHE_ALLOWED_TABLES:-tuple,authorization_model}"
+      CACHE_POLICY: "${PGCACHE_POLICY:-clock}"
+      ADMISSION_THRESHOLD: "${PGCACHE_ADMISSION:-1}"
+      # DISK_LIMIT deliberadamente NAO definido: o pgcache compara este valor com o
+      # uso TOTAL do filesystem, nao com o proprio cache. Um limite "razoavel" de
+      # 10 GiB num host com 55 GiB usados faz o cache se julgar em pressao de disco
+      # permanente e recusar TODO registro de query — silenciosamente, 100% miss.
+      PUBLICATION: "pgcache_fga_pub"
+      SLOT: "pgcache_fga_slot"
+      PGCACHE_TELEMETRY: "off"
+      LOG_LEVEL: "${PGCACHE_LOG_LEVEL:-info}"
+    volumes:
+      - pgcache-data:/var/lib/postgresql
+    ports: ["${PORT_PGCACHE:-16432}:6432", "${PORT_PGCACHE_METRICS:-19091}:9090"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U fga -d openfga || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ── Path A: baseline ──────────────────────────────────────────────────────
+  openfga-a:
+    <<: *openfga-common
+    container_name: fga-a
+    command: run
+    environment:
+      <<: [*openfga-env, *openfga-caches-off]
+      OPENFGA_DATASTORE_URI: "postgres://fga:fgapass@origin:5432/openfga?sslmode=disable&default_query_exec_mode=${PGX_EXEC_MODE:-cache_statement}"
+      OPENFGA_HTTP_ADDR: "0.0.0.0:8080"
+    ports: ["${PORT_FGA_A:-18080}:8080", "${PORT_FGA_A_METRICS:-21120}:2112"]
+    labels: { bench.path: "A", bench.name: "baseline" }
+
+  # ── Path B: via PgCache ───────────────────────────────────────────────────
+  openfga-b:
+    <<: *openfga-common
+    container_name: fga-b
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      pgcache: { condition: service_healthy }
+    command: run
+    environment:
+      <<: [*openfga-env, *openfga-caches-off]
+      OPENFGA_DATASTORE_URI: "postgres://fga:fgapass@pgcache:6432/openfga?sslmode=disable&default_query_exec_mode=${PGX_EXEC_MODE:-cache_statement}"
+      OPENFGA_HTTP_ADDR: "0.0.0.0:8080"
+    ports: ["${PORT_FGA_B:-18090}:8080", "${PORT_FGA_B_METRICS:-21121}:2112"]
+    labels: { bench.path: "B", bench.name: "pgcache" }
+
+  # ── Path C: cache in-process do proprio OpenFGA (o competidor honesto) ────
+  openfga-c:
+    <<: *openfga-common
+    container_name: fga-c
+    command: run
+    environment:
+      <<: *openfga-env
+      OPENFGA_DATASTORE_URI: "postgres://fga:fgapass@origin:5432/openfga?sslmode=disable&default_query_exec_mode=${PGX_EXEC_MODE:-cache_statement}"
+      OPENFGA_HTTP_ADDR: "0.0.0.0:8080"
+      OPENFGA_CHECK_QUERY_CACHE_ENABLED: "true"
+      OPENFGA_CHECK_QUERY_CACHE_TTL: "${FGA_CACHE_TTL:-10s}"
+      OPENFGA_CHECK_CACHE_LIMIT: "${FGA_CACHE_LIMIT:-100000}"
+      OPENFGA_CHECK_ITERATOR_CACHE_ENABLED: "true"
+      OPENFGA_CHECK_ITERATOR_CACHE_MAX_RESULTS: "10000"
+      OPENFGA_CHECK_ITERATOR_CACHE_TTL: "${FGA_CACHE_TTL:-10s}"
+      OPENFGA_LIST_OBJECTS_ITERATOR_CACHE_ENABLED: "true"
+      OPENFGA_CACHE_CONTROLLER_ENABLED: "true"
+      OPENFGA_CACHE_CONTROLLER_TTL: "10s"
+    ports: ["${PORT_FGA_C:-18100}:8080", "${PORT_FGA_C_METRICS:-21122}:2112"]
+    labels: { bench.path: "C", bench.name: "appcache" }
+
+  # ── Observabilidade (uma unica stack observa os tres paths) ───────────────
+  pgexporter-origin:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: fga-pgexp-origin
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://fga:fgapass@origin:5432/openfga?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: /etc/pgexp/queries.yaml
+    volumes:
+      - ./prometheus/pg-queries.yaml:/etc/pgexp/queries.yaml:ro
+    depends_on:
+      origin: { condition: service_healthy }
+    ports: ["${PORT_PGEXP:-19187}:9187"]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: fga-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports: ["${PORT_CADVISOR:-18081}:8080"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fga-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver
+      - --storage.tsdb.retention.time=30d
+      - --enable-feature=native-histograms
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    ports: ["${PORT_PROM:-19090}:9090"]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fga-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["${PORT_GRAFANA:-13001}:3000"]
+    depends_on: [prometheus]
+
+volumes:
+  origin-data:
+  pgcache-data:
+  prom-data:

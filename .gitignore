@@ -1,0 +1,44 @@
+# ── Codigo-fonte de terceiros clonado para estudo ────────────────────────────
+# 1,9 GB de clones (strapi, medusa, calcom, keycloak, netbox, plane, saleor) que
+# os agentes de discovery leem. Reclonaveis, e nao sao nossos.
+_sources/
+
+# ── Binarios compilados ──────────────────────────────────────────────────────
+# fgabench e fgaseed sao reconstruidos por `make`. 17 MB que mudam a cada build.
+bin/
+
+# ── Area de trabalho local de execucao ───────────────────────────────────────
+# Resultados PUBLICADOS ficam em <subject>/benchmark-docs/results-*/ e SAO
+# versionados: sao a evidencia por tras de cada numero dos relatorios. Estes dois
+# aqui sao rascunho local, sobrescritos a cada rodada.
+results/
+report/
+
+# ── Coletas brutas do Prometheus ─────────────────────────────────────────────
+# 21 MB de dumps de texto, um par por execucao, redundantes com o que ja' esta'
+# consolidado. O que importa continua versionado: summary.json, all-runs.csv,
+# manifest.json e latencies.csv — este ultimo permite recalcular os percentis de
+# forma independente, que e' o ponto de publicar dado bruto.
+*-metrics-before.txt
+*-metrics-after.txt
+
+# ── Intermediarios do seed ───────────────────────────────────────────────────
+# `fgaseed tuples` emite TSV para o \copy. Milhoes de linhas, regeneravel.
+*.tsv
+
+# ── Segredos e ambiente local ────────────────────────────────────────────────
+# A senha do Postgres do lab (`fgapass`) esta' em values.yaml de proposito: banco
+# efemero, em rede privada, sem dado real. Cluster exposto exige Workload
+# Identity + Key Vault — ver o comentario no proprio arquivo.
+.env
+.env.local
+*.pem
+*.key
+kubeconfig
+.claude/settings.local.json
+
+# ── Ruido de sistema e ferramentas ───────────────────────────────────────────
+.DS_Store
+__pycache__/
+*.pyc
+.remember/

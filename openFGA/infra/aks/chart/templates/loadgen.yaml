@@ -1,0 +1,120 @@
+{{- $ns := .Release.Namespace -}}
+{{- $paths := .Values.openfga.paths -}}
+{{/*
+Deployment, nao Pod avulso — e os resultados num PVC, nao em emptyDir.
+
+As duas coisas sao correcao do defeito D-17. O gerador era um Pod sem controller
+guardando artefatos num emptyDir: quando o no' Spot foi desalocado, nada o
+recriou e a fase 1 inteira morreu junto (27 execucoes, recuperadas so'
+parcialmente do log). Aconteceu duas vezes.
+
+Deployment => o scheduler recria o pod noutro no'.
+PVC        => os resultados sobrevivem ao pod, ao no' e a' campanha.
+
+O volume cobre /lab inteiro — repositorio, binarios e resultados. Recopiar o
+repo a cada recriacao de pod era a ultima peca que quebrava a campanha autonoma.
+
+Segue sendo pod de trabalho, nao Job: voce entra com exec e roda seed/suite a
+mao. Um Job com o benchmark embutido acoplaria o ciclo de vida do experimento ao
+do objeto Kubernetes, e uma run abortada viraria CrashLoop.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loadgen-results
+  labels: {{- include "lab.labels" . | nindent 4 }}
+  annotations:
+    # Sobrevive ao `helm uninstall`: os resultados sao o produto do lab, e
+    # apaga-los junto com o release ja' custou uma campanha.
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.loadgen.storage.className }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.loadgen.storage.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}    # RWO: o pod antigo solta o volume antes do novo
+  selector: {matchLabels: {app: loadgen}}
+  template:
+    metadata:
+      labels:
+        app: loadgen
+        lab.benedet/role: {{ .Values.loadgen.nodeRole }}
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      {{- include "lab.podNetwork" . | nindent 6 }}
+      {{- include "lab.placement" (dict "root" . "role" .Values.loadgen.nodeRole) | nindent 6 }}
+      {{- if .Values.loadgen.repoUrl }}
+      initContainers:
+        - name: clone
+          image: alpine/git:latest
+          args: [clone, --depth, "1", --branch, {{ .Values.loadgen.repoRef | quote }},
+                 {{ .Values.loadgen.repoUrl | quote }}, /lab]
+          volumeMounts: [{name: lab, mountPath: /lab}]
+      {{- end }}
+      containers:
+        - name: bench
+          image: {{ .Values.images.loadgen }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          # O seed carrega as tuplas por \copy, entao depende do psql — e a imagem
+          # golang nao traz cliente de Postgres. Nas rodadas r2/r3 ele foi
+          # instalado a mao dentro do pod, o que sumia a cada recriacao: foi assim
+          # que a campanha 4 morreu com exit 127 no meio da fase 1. Instalar aqui
+          # torna o pod reproduzivel a partir do chart, sem etapa manual.
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              if ! command -v psql >/dev/null; then
+                apt-get update -qq
+                apt-get install -y -qq --no-install-recommends postgresql-client
+              fi
+              psql --version
+              exec sleep infinity
+          # Sem isto o Job da campanha pode dar exec num pod que ainda esta'
+          # instalando o cliente, e o primeiro seed falha por comando ausente.
+          readinessProbe:
+            exec: {command: [/bin/bash, -c, "command -v psql"]}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 30
+          workingDir: /lab
+          env:
+            # Alvos dos tres caminhos, montados a partir da MESMA lista que gera
+            # os Deployments — porta que mudar em values.yaml muda nos dois lugares.
+            {{- range $p := $paths }}
+            - name: FGA_{{ $p.id }}
+              value: "http://openfga-{{ $p.id | lower }}.{{ $ns }}.svc.cluster.local:{{ $p.httpPort }}"
+            - name: FGA_{{ $p.id }}_METRICS
+              value: "http://openfga-{{ $p.id | lower }}.{{ $ns }}.svc.cluster.local:{{ $p.metricsPort }}/metrics"
+            {{- end }}
+            - name: PGCACHE_METRICS
+              value: "http://pgcache.{{ $ns }}.svc.cluster.local:{{ .Values.pgcache.metricsPort }}/metrics"
+            - {name: PGHOST, value: "origin.{{ $ns }}.svc.cluster.local"}
+            - {name: PGUSER, value: {{ .Values.origin.user | quote }}}
+            - {name: PGDATABASE, value: {{ .Values.origin.database | quote }}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: lab-db, key: POSTGRES_PASSWORD}}
+            - {name: NAMESPACE, value: {{ $ns | quote }}}
+          envFrom:
+            - configMapRef: {name: lab-config}
+          resources: {{- toYaml .Values.loadgen.resources | nindent 12 }}
+          volumeMounts:
+            # O PVC monta /lab INTEIRO, nao so' /lab/results. Com o repositorio e
+            # os binarios tambem no volume, a recriacao do pod deixa de exigir
+            # repovoamento — que era a ultima peca fragil da campanha autonoma.
+            - {name: lab, mountPath: /lab}
+      volumes:
+        - name: lab
+          persistentVolumeClaim: {claimName: loadgen-results}

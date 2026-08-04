@@ -1,0 +1,30 @@
+[11:48:50Z] CAMPANHA INICIADA — namespace pgcache-lab, reps=3, rate=40, dur=60s
+NAME                             READY   STATUS    RESTARTS        AGE     IP             NODE                                NOMINATED NODE   READINESS GATES
+lab-grafana-6b7d7dd7f8-ww49q     1/1     Running   0               3m59s   10.244.4.205   aks-agentpool-11928609-vmss000004   <none>           <none>
+lab-prometheus-cbcc47bcc-rg5m2   1/1     Running   0               3m59s   10.244.4.225   aks-agentpool-11928609-vmss000004   <none>           <none>
+loadgen-5cbd6bdf87-pjdrx         1/1     Running   0               3m59s   10.244.0.236   aks-userpool-11928609-vmss000009    <none>           <none>
+openfga-a-6c6dcc5567-n8cmw       1/1     Running   2 (2m27s ago)   3m58s   10.244.5.11    aks-userpool-11928609-vmss00000a    <none>           <none>
+openfga-b-57b7cd4d49-pl98q       1/1     Running   0               51s     10.244.5.162   aks-userpool-11928609-vmss00000a    <none>           <none>
+openfga-c-867f7566fb-tmlrl       1/1     Running   2 (2m23s ago)   3m58s   10.244.5.113   aks-userpool-11928609-vmss00000a    <none>           <none>
+origin-0                         1/1     Running   0               3m57s   10.244.3.125   aks-userpool-11928609-vmss00000b    <none>           <none>
+pgcache-85bbbc74d9-vrbpd         1/1     Running   0               58s     10.244.2.74    aks-userpool-11928609-vmss000008    <none>           <none>
+[11:48:51Z] ######## FASE 1 — E1 · networkMode=bare · W1/W2/W3 · 3 reps ########
+[11:50:43Z] ==== SEED E1 ====
+bash: line 1: psql: command not found
+command terminated with exit code 127
+[11:50:44Z] -- reiniciando PgCache (cache frio pos-seed) e openfga-b
+[11:51:28Z] -- validando massa contra o oraculo
+bash: line 1: ./bin/fgaseed: No such file or directory
+command terminated with exit code 127
+[11:51:29Z] -- gate de correcao W7 (A vs B)
+bash: line 1: ./bin/fgabench: No such file or directory
+command terminated with exit code 127
+[11:51:29Z] --- E1/w1/A run=bare-r1 dist=zipf rate=40
+bash: line 1: ./bin/fgabench: No such file or directory
+command terminated with exit code 127
+[11:51:30Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r1:
+114s        Warning   FailedScheduling         pod/loadgen-9c7868d87-xvg5w             0/7 nodes are available: 1 Insufficient memory, 1 node(s) didn't match pod anti-affinity rules, 1 node(s) had untolerated taint(s), 2 node(s) didn't match Pod's node affinity/selector, 3 Insufficient cpu. no new claims to deallocate, preemption: 0/7 nodes are available: 3 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+5m59s       Warning   FailedScheduling         pod/lab-prometheus-cbcc47bcc-rg5m2      0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+5m52s       Warning   FailedScheduling         pod/lab-prometheus-cbcc47bcc-rg5m2      0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+2m5s        Warning   FailedScheduling         pod/loadgen-9c7868d87-xvg5w             0/6 nodes are available: 1 Insufficient memory, 1 node(s) didn't match pod anti-affinity rules, 2 node(s) didn't match Pod's node affinity/selector, 3 Insufficient cpu. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+6m37s       Warning   FailedScheduling         pod/loadgen-5cbd6bdf87-pjdrx            0/4 nodes are available: 1 Insufficient memory, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) didn't match pod anti-affinity rules, 2 Insufficient cpu. no new claims to deallocate, preemption: 0/4 nodes are available: 1 Preemption is not helpful for scheduling, 3 No preemption victims found for incoming pod.

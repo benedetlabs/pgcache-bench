@@ -1,0 +1,16 @@
+{
+  "name": "strapi-pgcache-spike",
+  "version": "1.0.0",
+  "private": true,
+  "description": "R1 / R1b protocol spike for the Strapi x PgCache subject. Uses node-postgres because Strapi does (knex 3.0.1 + pg 8.20.0, STUDY.md section 5).",
+  "main": "check.js",
+  "scripts": {
+    "start": "node check.js"
+  },
+  "dependencies": {
+    "pg": "8.20.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

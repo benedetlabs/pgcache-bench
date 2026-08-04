@@ -1,0 +1,50 @@
+[11:52:04Z] CAMPANHA INICIADA — namespace pgcache-lab, reps=3, rate=40, dur=60s
+NAME                              READY   STATUS    RESTARTS        AGE     IP             NODE                                NOMINATED NODE   READINESS GATES
+lab-grafana-d6868bd56-wgk8t       1/1     Running   0               3m10s   10.244.4.60    aks-agentpool-11928609-vmss000004   <none>           <none>
+lab-prometheus-77b97d947f-k75mj   1/1     Running   0               3m11s   10.244.4.167   aks-agentpool-11928609-vmss000004   <none>           <none>
+loadgen-9c7868d87-xvg5w           1/1     Running   0               2m41s   10.224.0.10    aks-userpool-11928609-vmss00000b    <none>           <none>
+openfga-a-6ff8668787-vtgww        1/1     Running   1 (2m20s ago)   3m10s   10.224.0.6     aks-userpool-11928609-vmss00000a    <none>           <none>
+openfga-b-598c779b69-6x9nq        1/1     Running   0               56s     10.224.0.7     aks-userpool-11928609-vmss000008    <none>           <none>
+openfga-c-58cf4cd684-bx6rf        1/1     Running   1 (2m13s ago)   3m9s    10.224.0.6     aks-userpool-11928609-vmss00000a    <none>           <none>
+origin-0                          1/1     Running   0               3m9s    10.224.0.4     aks-userpool-11928609-vmss000009    <none>           <none>
+pgcache-5c4549db8b-bhdbm          1/1     Running   0               80s     10.224.0.9     aks-userpool-11928609-vmss00000c    <none>           <none>
+[11:52:05Z] ######## FASE 1 — E1 · networkMode=bare · W1/W2/W3 · 3 reps ########
+[11:52:14Z] -- repovoando o pod do gerador
+BOOTSTRAP_OK
+[11:52:27Z] ==== SEED E1 ====
+store=01KZ3QFQHAD8P7J77ZY4W8V45W model=01KZ3QFQHENBGHMMNPHAE871Q5 degrau=E1 tuplas_previstas=84598
+emitidas 84598 tuplas para o degrau E1
+COPY 84598
+SEED_OK
+[11:52:33Z] -- reiniciando PgCache (cache frio pos-seed) e openfga-b
+[11:53:28Z] -- validando massa contra o oraculo
+verificacao do degrau E1 (http://openfga-a.pgcache-lab.svc.cluster.local:8080)
+  positivos confirmados: 300   divergentes: 0
+  negativos confirmados: 300   divergentes: 0
+  erros de transporte:   0
+  OK — oraculo e OpenFGA concordam em 100% da amostra.
+[11:53:31Z] -- gate de correcao W7 (A vs B)
+W7 — correcao diferencial (http://openfga-a.pgcache-lab.svc.cluster.local:8080 vs http://openfga-b.pgcache-lab.svc.cluster.local:8090)
+  amostras comparadas : 4000
+  concordancia A==B   : 4000 (100.000000%)
+  divergencias        : 0
+  A bate com oraculo  : 4000 (100.000000%)
+  B bate com oraculo  : 4000 (100.000000%)
+  erros de transporte : 0
+  OK — nenhuma divergencia de decisao.
+[11:54:37Z] --- E1/w1/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.82  p90=6.69  p95=8.03  p99=11.10  p99.9=15.79  max=19.37
+  amplificacao: 103.16 queries no datastore por requisicao
+  saida       : results/E1/w1/A-bare-r1
+
+[11:56:23Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r1:
+10m         Warning   FailedScheduling         pod/lab-prometheus-cbcc47bcc-rg5m2      0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+10m         Warning   FailedScheduling         pod/lab-prometheus-cbcc47bcc-rg5m2      0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+10m         Warning   FailedScheduling         pod/origin-0                            0/5 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 2 Insufficient memory, 3 Insufficient cpu. no new claims to deallocate, preemption: 0/5 nodes are available: 2 Preemption is not helpful for scheduling, 3 No preemption victims found for incoming pod.
+11m         Warning   FailedScheduling         pod/lab-grafana-6b7d7dd7f8-ww49q        0/4 nodes are available: 1 Insufficient cpu, 3 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/4 nodes are available: 1 No preemption victims found for incoming pod, 3 Preemption is not helpful for scheduling.
+11m         Warning   FailedScheduling         pod/origin-0                            0/4 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 2 Insufficient memory, 3 Insufficient cpu. no new claims to deallocate, preemption: 0/4 nodes are available: 1 Preemption is not helpful for scheduling, 3 No preemption victims found for incoming pod.

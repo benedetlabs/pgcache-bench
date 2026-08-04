@@ -1,0 +1,433 @@
+[00:30:05Z] CAMPANHA INICIADA — namespace pgcache-lab, reps=3, rate=40, dur=60s
+NAME                             READY   STATUS    RESTARTS        AGE     IP             NODE                                NOMINATED NODE   READINESS GATES
+lab-grafana-6b7d7dd7f8-v2br4     1/1     Running   0               5m14s   10.244.1.111   aks-agentpool-11928609-vmss000001   <none>           <none>
+lab-prometheus-cbcc47bcc-677tt   1/1     Running   0               5m14s   10.244.1.6     aks-agentpool-11928609-vmss000001   <none>           <none>
+loadgen                          1/1     Running   0               86m     10.244.4.150   aks-userpool-11928609-vmss000004    <none>           <none>
+openfga-a-6c6dcc5567-95jgp       1/1     Running   0               5m14s   10.244.3.94    aks-userpool-11928609-vmss000002    <none>           <none>
+openfga-b-7fcf447f6f-tzmj2       1/1     Running   1 (4m18s ago)   5m14s   10.244.3.131   aks-userpool-11928609-vmss000002    <none>           <none>
+openfga-c-867f7566fb-vhlsp       1/1     Running   0               5m14s   10.244.3.129   aks-userpool-11928609-vmss000002    <none>           <none>
+origin-0                         1/1     Running   0               5m13s   10.244.0.220   aks-userpool-11928609-vmss000005    <none>           <none>
+pgcache-864c699646-69kt9         1/1     Running   2 (4m53s ago)   4m59s   10.244.6.18    aks-userpool-11928609-vmss000000    <none>           <none>
+[00:30:06Z] ######## FASE 1 — E1 · networkMode=bare · W1/W2/W3 · 3 reps ########
+[00:31:20Z] ==== SEED E1 ====
+store=01KZ2GGJ2G2AETX0PK8AH1W568 model=01KZ2GGJ2M2D18HKR100BWH5FJ degrau=E1 tuplas_previstas=84598
+emitidas 84598 tuplas para o degrau E1
+COPY 84598
+SEED_OK
+[00:31:30Z] -- reiniciando PgCache (cache frio pos-seed) e openfga-b
+[00:33:46Z] -- validando massa contra o oraculo
+verificacao do degrau E1 (http://openfga-a.pgcache-lab.svc.cluster.local:8080)
+  positivos confirmados: 300   divergentes: 0
+  negativos confirmados: 300   divergentes: 0
+  erros de transporte:   0
+  OK — oraculo e OpenFGA concordam em 100% da amostra.
+[00:33:50Z] -- gate de correcao W7 (A vs B)
+W7 — correcao diferencial (http://openfga-a.pgcache-lab.svc.cluster.local:8080 vs http://openfga-b.pgcache-lab.svc.cluster.local:8090)
+  amostras comparadas : 4000
+  concordancia A==B   : 4000 (100.000000%)
+  divergencias        : 0
+  A bate com oraculo  : 4000 (100.000000%)
+  B bate com oraculo  : 4000 (100.000000%)
+  erros de transporte : 0
+  OK — nenhuma divergencia de decisao.
+[00:34:32Z] --- E1/w1/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.09  p90=7.48  p95=8.83  p99=12.55  p99.9=16.05  max=16.71
+  amplificacao: 108.07 queries no datastore por requisicao
+  saida       : results/E1/w1/A-bare-r1
+
+[00:36:18Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r1:
+5m31s       Warning   FailedScheduling         pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+4m57s       Warning   FailedScheduling         pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+53m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn         0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+53m         Warning   FailedScheduling         pod/openfga-b-59c689d54c-wwrmn         0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+4m13s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:36:41Z] --- E1/w1/B run=bare-r1 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[00:36:42Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/bare-r1:
+5m55s       Warning   FailedScheduling         pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+4m38s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+3m52s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+3m51s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/7 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) had untolerated taint(s), 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 3 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+5m55s       Warning   FailedScheduling         pod/lab-grafana-d6868bd56-6tg92        0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+[00:36:47Z] --- E1/w1/C run=bare-r1 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.39  p90=8.93  p95=10.78  p99=16.11  p99.9=23.47  max=24.39
+  amplificacao: 67.94 queries no datastore por requisicao
+  saida       : results/E1/w1/C-bare-r1
+
+[00:38:33Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/bare-r1:
+7m46s       Warning   FailedScheduling         pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+6m29s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+5m43s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+5m42s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/7 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) had untolerated taint(s), 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 3 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+7m46s       Warning   FailedScheduling         pod/lab-grafana-d6868bd56-6tg92        0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+[00:38:38Z] --- E1/w2/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.00  p90=8.36  p95=9.11  p99=11.11  p99.9=18.24  max=19.30
+  amplificacao: 171.26 queries no datastore por requisicao
+  saida       : results/E1/w2/A-bare-r1
+
+[00:40:24Z] !! CONTAMINACAO POSSIVEL apos E1/w2/A/bare-r1:
+9m37s       Warning   FailedScheduling         pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+8m20s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+7m34s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+7m34s       Warning   FailedScheduling         pod/openfga-b-ffb765d87-tlsqn          0/7 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) had untolerated taint(s), 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 3 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+9m37s       Warning   FailedScheduling         pod/lab-grafana-d6868bd56-6tg92        0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+[00:40:48Z] --- E1/w2/B run=bare-r1 dist=zipf rate=40
+
+── pgcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=9.05  p90=23.09  p95=25.44  p99=31.84  p99.9=98.02  max=123.02
+  amplificacao: 171.43 queries no datastore por requisicao
+  pgcache     : 385868 hits / 24231 misses (94.1% hit ratio)
+  saida       : results/E1/w2/B-bare-r1
+
+[00:42:34Z] !! CONTAMINACAO POSSIVEL apos E1/w2/B/bare-r1:
+10m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+11m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+58m         Warning   FailedScheduling    pod/openfga-b-59c689d54c-wwrmn         0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+59m         Warning   FailedScheduling    pod/openfga-b-59c689d54c-wwrmn         0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+60m         Warning   FailedScheduling    pod/openfga-b-59c689d54c-wwrmn         0/5 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/5 nodes are available: 1 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:42:39Z] --- E1/w2/C run=bare-r1 dist=zipf rate=40
+
+── appcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.82  p90=9.66  p95=10.27  p99=13.74  p99.9=21.68  max=24.43
+  amplificacao: 146.24 queries no datastore por requisicao
+  saida       : results/E1/w2/C-bare-r1
+
+[00:44:25Z] !! CONTAMINACAO POSSIVEL apos E1/w2/C/bare-r1:
+13m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+12m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+11m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/7 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) had untolerated taint(s), 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 3 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+11m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+11m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:44:30Z] --- E1/w3/A run=bare-r1 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.98  p90=7.03  p95=7.97  p99=9.54  p99.9=12.52  max=15.05
+  amplificacao: 124.56 queries no datastore por requisicao
+  saida       : results/E1/w3/A-bare-r1
+
+[00:46:15Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/bare-r1:
+13m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+14m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+14m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+13m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+62m         Warning   FailedScheduling    pod/openfga-b-59c689d54c-wwrmn         0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:46:40Z] --- E1/w3/B run=bare-r1 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=10.37  p90=21.61  p95=24.65  p99=31.13  p99.9=36.54  max=43.08
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268457 hits / 30021 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-bare-r1
+
+[00:48:26Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/bare-r1:
+16m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+64m         Warning   FailedScheduling    pod/openfga-b-59c689d54c-wwrmn         0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+18m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+17m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+16m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[00:48:31Z] --- E1/w3/C run=bare-r1 dist=zipf rate=40
+[00:49:53Z] !! CONTAMINACAO POSSIVEL apos E1/w3/C/bare-r1:
+18m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+66m         Warning   FailedScheduling    pod/openfga-b-59c689d54c-wwrmn         0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint(s), 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+19m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+18m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+17m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[00:49:58Z] --- E1/w1/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.09  p90=7.45  p95=9.01  p99=11.92  p99.9=18.84  max=19.49
+  amplificacao: 108.62 queries no datastore por requisicao
+  saida       : results/E1/w1/A-bare-r2
+
+[00:51:44Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r2:
+21m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+20m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+19m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+18m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/7 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 1 node(s) had untolerated taint(s), 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/7 nodes are available: 3 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+18m         Warning   FailedScheduling    pod/openfga-b-ffb765d87-tlsqn          0/6 nodes are available: 1 node(s) didn't have free ports for the requested pod ports, 2 node(s) didn't match Pod's node affinity/selector, 3 node(s) didn't match pod anti-affinity rules. no new claims to deallocate, preemption: 0/6 nodes are available: 2 Preemption is not helpful for scheduling, 4 No preemption victims found for incoming pod.
+[00:51:46Z] !! 1 pod(s) fora de 1/1 Running apos E1/w1/A/bare-r2
+[00:52:10Z] --- E1/w1/B run=bare-r2 dist=zipf rate=40
+
+── pgcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=5.35  p90=15.69  p95=19.66  p99=25.72  p99.9=39.48  max=41.97
+  amplificacao: 111.65 queries no datastore por requisicao
+  pgcache     : 236531 hits / 24717 misses (90.5% hit ratio)
+  saida       : results/E1/w1/B-bare-r2
+
+[00:53:55Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/bare-r2:
+3m12s       Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+119s        Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+23m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+22m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+21m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[00:54:01Z] --- E1/w1/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.41  p90=8.89  p95=10.57  p99=15.69  p99.9=23.46  max=24.65
+  amplificacao: 68.33 queries no datastore por requisicao
+  saida       : results/E1/w1/C-bare-r2
+
+[00:55:46Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/bare-r2:
+5m3s        Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+3m50s       Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+25m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+24m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+23m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[00:55:51Z] --- E1/w2/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=5.99  p90=8.42  p95=9.15  p99=10.84  p99.9=18.62  max=20.52
+  amplificacao: 171.29 queries no datastore por requisicao
+  saida       : results/E1/w2/A-bare-r2
+
+[00:57:37Z] !! CONTAMINACAO POSSIVEL apos E1/w2/A/bare-r2:
+6m54s       Normal    Preempted           pod/lab-grafana-d6868bd56-qmdfv        Preempted by pod dc4e9f0b-b2e9-40cb-baee-dc42ce85fc7f on node aks-agentpool-11928609-vmss000001
+5m41s       Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+27m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+26m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+25m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[00:58:01Z] --- E1/w2/B run=bare-r2 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[00:58:02Z] !! CONTAMINACAO POSSIVEL apos E1/w2/B/bare-r2:
+6m6s        Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+7m20s       Normal    Preempted           pod/lab-prometheus-77b97d947f-vmvv4    Preempted by pod ae17b48f-68d1-44ed-be95-2eab7e10c1fb on node aks-agentpool-11928609-vmss000001
+27m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+26m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+25m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[00:58:07Z] --- E1/w2/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.79  p90=9.73  p95=10.36  p99=14.21  p99.9=22.73  max=24.39
+  amplificacao: 145.93 queries no datastore por requisicao
+  saida       : results/E1/w2/C-bare-r2
+
+[00:59:54Z] !! CONTAMINACAO POSSIVEL apos E1/w2/C/bare-r2:
+7m57s       Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+9m11s       Normal    Preempted           pod/lab-prometheus-77b97d947f-vmvv4    Preempted by pod ae17b48f-68d1-44ed-be95-2eab7e10c1fb on node aks-agentpool-11928609-vmss000001
+29m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+28m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+27m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[00:59:59Z] --- E1/w3/A run=bare-r2 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.94  p90=7.15  p95=8.19  p99=9.75  p99.9=12.03  max=17.46
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-bare-r2
+
+[01:01:45Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/bare-r2:
+9m49s       Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+11m         Normal    Preempted           pod/lab-prometheus-77b97d947f-vmvv4    Preempted by pod ae17b48f-68d1-44ed-be95-2eab7e10c1fb on node aks-agentpool-11928609-vmss000001
+31m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+30m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+29m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:02:08Z] --- E1/w3/B run=bare-r2 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=10.15  p90=21.06  p95=24.07  p99=30.27  p99.9=35.37  max=43.27
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268473 hits / 30005 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-bare-r2
+
+[01:03:55Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/bare-r2:
+11m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+13m         Normal    Preempted           pod/lab-grafana-d6868bd56-qmdfv        Preempted by pod dc4e9f0b-b2e9-40cb-baee-dc42ce85fc7f on node aks-agentpool-11928609-vmss000001
+33m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+32m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+31m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:04:00Z] --- E1/w3/C run=bare-r2 dist=zipf rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.34  p90=7.70  p95=8.79  p99=10.27  p99.9=15.11  max=19.51
+  amplificacao: 71.13 queries no datastore por requisicao
+  saida       : results/E1/w3/C-bare-r2
+
+[01:05:46Z] !! CONTAMINACAO POSSIVEL apos E1/w3/C/bare-r2:
+13m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+15m         Normal    Preempted           pod/lab-grafana-d6868bd56-qmdfv        Preempted by pod dc4e9f0b-b2e9-40cb-baee-dc42ce85fc7f on node aks-agentpool-11928609-vmss000001
+35m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+34m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+33m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:05:51Z] --- E1/w1/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=4.02  p90=7.43  p95=8.92  p99=12.90  p99.9=17.46  max=20.11
+  amplificacao: 108.62 queries no datastore por requisicao
+  saida       : results/E1/w1/A-bare-r3
+
+[01:07:37Z] !! CONTAMINACAO POSSIVEL apos E1/w1/A/bare-r3:
+15m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+16m         Normal    Preempted           pod/lab-grafana-d6868bd56-qmdfv        Preempted by pod dc4e9f0b-b2e9-40cb-baee-dc42ce85fc7f on node aks-agentpool-11928609-vmss000001
+37m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+36m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+35m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:08:01Z] --- E1/w1/B run=bare-r3 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[01:08:02Z] !! CONTAMINACAO POSSIVEL apos E1/w1/B/bare-r3:
+16m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+16m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+37m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+36m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+35m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:08:07Z] --- E1/w1/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w1 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 2018 / 382
+  latencia ms : p50=3.46  p90=8.60  p95=10.32  p99=15.53  p99.9=22.74  max=24.25
+  amplificacao: 67.02 queries no datastore por requisicao
+  saida       : results/E1/w1/C-bare-r3
+
+[01:09:53Z] !! CONTAMINACAO POSSIVEL apos E1/w1/C/bare-r3:
+17m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+17m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+39m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+38m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+37m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:09:58Z] --- E1/w2/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.08  p90=8.49  p95=9.25  p99=11.44  p99.9=17.52  max=22.48
+  amplificacao: 171.15 queries no datastore por requisicao
+  saida       : results/E1/w2/A-bare-r3
+
+[01:11:44Z] !! CONTAMINACAO POSSIVEL apos E1/w2/A/bare-r3:
+19m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+19m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+41m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+40m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+39m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:12:07Z] --- E1/w2/B run=bare-r3 dist=zipf rate=40
+erro: alvo http://openfga-b.pgcache-lab.svc.cluster.local:8090 nao responde: healthz -> 500
+command terminated with exit code 1
+[01:12:07Z] !! CONTAMINACAO POSSIVEL apos E1/w2/B/bare-r3:
+21m         Normal    Preempted           pod/lab-grafana-d6868bd56-qmdfv        Preempted by pod dc4e9f0b-b2e9-40cb-baee-dc42ce85fc7f on node aks-agentpool-11928609-vmss000001
+20m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+41m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+40m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+40m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:12:13Z] --- E1/w2/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w2 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 70 / 2330
+  latencia ms : p50=6.79  p90=9.68  p95=10.20  p99=12.94  p99.9=21.98  max=23.42
+  amplificacao: 146.14 queries no datastore por requisicao
+  saida       : results/E1/w2/C-bare-r3
+
+[01:13:58Z] !! CONTAMINACAO POSSIVEL apos E1/w2/C/bare-r3:
+23m         Normal    Preempted           pod/lab-grafana-d6868bd56-qmdfv        Preempted by pod dc4e9f0b-b2e9-40cb-baee-dc42ce85fc7f on node aks-agentpool-11928609-vmss000001
+22m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+43m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+42m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+41m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:14:03Z] --- E1/w3/A run=bare-r3 dist=zipf rate=40
+
+── baseline / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.97  p90=7.03  p95=7.99  p99=9.48  p99.9=12.87  max=16.97
+  amplificacao: 124.53 queries no datastore por requisicao
+  saida       : results/E1/w3/A-bare-r3
+
+[01:15:49Z] !! CONTAMINACAO POSSIVEL apos E1/w3/A/bare-r3:
+25m         Normal    Preempted           pod/lab-grafana-d6868bd56-qmdfv        Preempted by pod dc4e9f0b-b2e9-40cb-baee-dc42ce85fc7f on node aks-agentpool-11928609-vmss000001
+23m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+45m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+44m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+43m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:16:13Z] --- E1/w3/B run=bare-r3 dist=zipf rate=40
+
+── pgcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=10.22  p90=21.22  p95=24.06  p99=30.65  p99.9=38.83  max=44.21
+  amplificacao: 124.53 queries no datastore por requisicao
+  pgcache     : 268457 hits / 30021 misses (89.9% hit ratio)
+  saida       : results/E1/w3/B-bare-r3
+
+[01:17:59Z] !! CONTAMINACAO POSSIVEL apos E1/w3/B/bare-r3:
+26m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+27m         Normal    Preempted           pod/lab-prometheus-77b97d947f-vmvv4    Preempted by pod ae17b48f-68d1-44ed-be95-2eab7e10c1fb on node aks-agentpool-11928609-vmss000001
+47m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+46m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+45m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+[01:18:04Z] --- E1/w3/C run=bare-r3 dist=zipf rate=40
+
+── appcache / w3 / degrau E1 ──────────────────────────────
+  requisicoes : 2400 (erros 0, descartes 1)
+  taxa        : 40 rps alvo -> 40 rps alcancado
+  allowed/den : 0 / 2400
+  latencia ms : p50=4.30  p90=7.73  p95=8.84  p99=10.59  p99.9=13.72  max=19.28
+  amplificacao: 71.15 queries no datastore por requisicao
+  saida       : results/E1/w3/C-bare-r3
+
+[01:19:50Z] !! CONTAMINACAO POSSIVEL apos E1/w3/C/bare-r3:
+27m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-55jmk    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.
+29m         Normal    Preempted           pod/lab-prometheus-77b97d947f-vmvv4    Preempted by pod ae17b48f-68d1-44ed-be95-2eab7e10c1fb on node aks-agentpool-11928609-vmss000001
+49m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+48m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/5 nodes are available: 1 Insufficient cpu, 4 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/5 nodes are available: 1 No preemption victims found for incoming pod, 4 Preemption is not helpful for scheduling.
+47m         Warning   FailedScheduling    pod/lab-prometheus-77b97d947f-cz6rz    0/6 nodes are available: 1 Insufficient cpu, 5 node(s) had untolerated taint(s). no new claims to deallocate, preemption: 0/6 nodes are available: 1 No preemption victims found for incoming pod, 5 Preemption is not helpful for scheduling.

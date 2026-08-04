@@ -1,0 +1,11 @@
+apiVersion: v2
+name: pgcache-openfga-lab
+description: >-
+  Lab de benchmark PgCache x OpenFGA. Tres caminhos (baseline, pgcache,
+  appcache) contra a mesma origem, com um pod por no' dedicado.
+type: application
+version: 0.1.0
+appVersion: "1.0"
+keywords: [benchmark, openfga, pgcache, postgres]
+maintainers:
+  - name: BenedetLabs
