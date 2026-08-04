@@ -259,3 +259,76 @@ rungs. Evidence: `netbox/RESULTS-probe0.md`.
 (~40 µs/query, and the datastore was most of the request). NetBox failed C9b
 because the application was too slow (the datastore was 3-27% of the request).
 A subject must clear both to be worth a campaign.
+
+### C9c — CORRECTION to C9: only one kind of query cost is bankable
+
+**Added 2026-08-04.** C9 above says expensive origin queries are the regime a
+cache needs. That is **wrong as written**, and the correction matters because it
+inverts the advice for a whole class of subjects.
+
+Query cost has two sources and a cache can only bank one of them:
+
+- **Cost from work the cache skips** — parse, plan, index descent, buffer
+  lookups. Banked on every hit. This is real headroom.
+- **Cost from result size** — not skipped. The cache must materialise the rows,
+  hold them, and ship them on *every* hit, once per distinct parameterisation.
+  This is headroom the cache has to pay for twice.
+
+**Test:** alongside per-query latency, record rows returned per query. A query
+that is slow because it scans and returns one aggregated row is the good case. A
+query that is slow because it returns many rows is the bad case, and it gets
+worse as the parameter space widens, because each parameterisation needs its own
+materialisation.
+
+**Origin:** pgbench probe 0, 2026-08-04. An index range scan with `sum()` at a
+**95.6% hit ratio** still lost — origin 104 µs, PgCache 159 µs on 100 rows — and
+at 10,000 rows PgCache lost by **65×** (826 µs versus 54,023 µs) with the hit
+ratio collapsing to 17%. PgCache's own `mv_size_ratio` is the knob that gates
+this; the measurement is what that gate looks like from outside.
+Evidence: `synthetic/RESULTS-probe0.md` §5.
+
+---
+
+## C10 — The hit ratio must clear the break-even, and break-even is computable
+
+**Severity:** fatal when it fails · **Cost:** three measurements
+
+C9 asks whether a cache *can* be faster. C10 asks *how often it has to be right*
+before it is. The answer is not a matter of taste — it is arithmetic, and it can
+be computed before a campaign is designed.
+
+Let `O` be the origin's cost per query, `H` PgCache's cost on a hit, `M` its cost
+on a miss. PgCache is ahead when
+
+```
+r·H + (1 − r)·M  <  O          →     r  >  (M − O) / (M − H)
+```
+
+**Two conditions, and both must hold:**
+
+1. **`H < O`.** If a hit costs at least what the origin costs, no hit ratio
+   saves it — even `r = 1` leaves `H > O`. This is C9 restated exactly, and it
+   is a *structural* disqualifier: no configuration reaches it.
+2. **`r > (M − O)/(M − H)`.** The required hit ratio rises steeply as `O` falls
+   toward `H`. A faster origin does not merely shrink the win, it raises the bar
+   for earning one.
+
+**Test.** Three cells, half an hour on a laptop: measure `O` on the origin,
+measure PgCache at a hit ratio near 1 and near 0 to get `H` and `M`, compute
+break-even, and compare against the hit ratio the real workload produces.
+
+**Threshold.** Break-even above ~95% means the subject needs a hit ratio few real
+workloads sustain. Above 99%, abandon.
+
+**Origin:** pgbench probe 0, 2026-08-04. Measured O=77 µs, H≈57 µs, M≈174 µs,
+giving a predicted break-even of **82.9%**. Sweeping Zipfian skew moved the hit
+ratio continuously and the observed crossover landed between 82.3% (PgCache −16%)
+and 97.7% (PgCache +12%), consistent with the prediction.
+Evidence: `synthetic/RESULTS-probe0.md` §§2–3.
+
+**Why this earns a place: it retro-explains both prior failures.** openFGA had a
+~90% hit ratio and still lost, which looked like a tuning problem for two
+campaigns — it was not, because O≈40 µs and H≈45 µs meant **condition 1 failed**
+and no hit ratio whatsoever could have worked. NetBox reached only 40%, failing
+**condition 2** by a wide margin. Had C10 existed, neither would have reached a
+campaign, and the D-24 configuration hunt would never have started.

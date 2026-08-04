@@ -1,0 +1,22 @@
+-- S3 — range scan with an aggregate. C9 tested from the expensive side.
+--
+-- S1 and S2 issue the single cheapest query PostgreSQL can serve: an equality
+-- lookup on a primary key returning one row from a warm buffer pool. Measured
+-- here at 80 us against the origin, versus PgCache's ~45 us floor -- so even a
+-- 100% hit ratio has under 35 us of room, and that is before proxy overhead.
+-- That is the openFGA failure in miniature, and S1/S2 alone would reproduce it
+-- and teach nothing new.
+--
+-- This script is the control for that. An index range scan over :span rows plus
+-- a sum is tens of times more expensive on the origin, which is precisely the
+-- regime C9 says a cache needs. If PgCache cannot win here, the problem is not
+-- the subject.
+--
+--   -D span=100    ~100 rows aggregated
+--   -D span=10000  large enough that the origin's cost clearly dominates
+--
+-- :hot bounds the starting offset so the hit ratio stays controllable
+-- independently of :span -- otherwise raising the cost would also destroy
+-- residency and the two effects could not be told apart.
+\set lo random(1, :hot)
+SELECT sum(abalance) FROM pgbench_accounts WHERE aid BETWEEN :lo AND :lo + :span;
