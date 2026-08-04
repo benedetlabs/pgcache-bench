@@ -9,7 +9,7 @@ actually sit where the formula says; does the win survive the protocol real
 applications use; and where does the cache stop paying as results get larger.
 
 Answers: **yes**, **yes but smaller**, and **it is not a size rule — it is a
-cliff**, which corrects a criterion this platform wrote three days ago.
+cliff**, which corrects a criterion this platform wrote earlier the same day.
 
 ---
 
@@ -113,7 +113,7 @@ would need the `mv_*` metrics recorded per cell, which this campaign did not do.
 
 ---
 
-## This corrects C9c, which this platform wrote three days ago
+## This corrects C9c, written earlier the same day
 
 C9c was added on 2026-08-04 from the laptop probe and says: *"cost from result
 size is not bankable."*
@@ -124,7 +124,7 @@ ratio**. Scan cost *is* bankable — that is the good case, not the bad one.
 
 There was also a live suspicion that the laptop's 65× loss at span=10,000 was an
 artifact of Docker Desktop's constrained memory. **It is not.** It reproduces on a
-node with 30 GB, and worse: 254× instead of 65×.
+node with 30 GB, and worse: 295× instead of 65×.
 
 Corrected statement:
 
