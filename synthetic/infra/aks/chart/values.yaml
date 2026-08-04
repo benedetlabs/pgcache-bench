@@ -1,0 +1,207 @@
+# Synthetic lab (pgbench) on AKS.
+#
+# Adapted from the openFGA chart, which is why the placement, storage and
+# Recreate decisions below are terse: each one is a defect this platform already
+# paid for once. The differences from that chart are the ones that matter here.
+#
+# TWO PATHS, NOT THREE. pgbench has no application tier, so there is no path C.
+# Every report has to say so; a reader who assumes a three-path comparison will
+# read a two-path result as something it is not.
+
+# ── Network ─────────────────────────────────────────────────────────────────
+#
+#   bare  hostNetwork + headless Service. DNS resolves to the node IP, so no
+#         kube-proxy, no NAT, no overlay on the data path.
+#   cni   normal pod network + ClusterIP.
+#
+# `bare` for the reference campaign. At 100k+ tps the per-packet cost of the
+# overlay is a large fraction of a 40 us query, and mixing that into the A/B
+# comparison would mean measuring Kubernetes rather than the cache.
+networkMode: bare
+
+# ── Placement ───────────────────────────────────────────────────────────────
+#
+# ONE POD PER NODE, and here it is not a nicety. Path B runs origin AND pgcache;
+# path A runs only origin. Co-locating them would give path B less CPU for the
+# origin than path A had, at exactly the concurrency where the comparison is
+# decided.
+#
+# The userpool autoscales 0-5 (verified 2026-08-04: min=0, max=5, spot). Three
+# roles means three nodes, which the autoscaler provisions on its own when the
+# pods go Pending. NOTHING HERE MODIFIES THE POOL -- it was created by hand and
+# is the operator's.
+#
+# The pool is Spot with Deallocate eviction, and one node was found NotReady
+# with VMEventScheduled=True while writing this. After every campaign window:
+#   kubectl -n pgcache-synth get events | grep -i 'preempt\|evict'
+# A hit inside the window invalidates that repetition. Discard and redo it.
+placement:
+  mode: sharedPool
+  sharedPool:
+    nodeSelector:
+      agentpool: userpool
+    tolerations:
+      - key: kubernetes.azure.com/scalesetpriority
+        operator: Equal
+        value: spot
+        effect: NoSchedule
+
+# ── Images ──────────────────────────────────────────────────────────────────
+# `latest` does not identify a build. Pin digests before publishing a number.
+images:
+  postgres: postgres:17
+  pgcache: pgcache/pgcache:latest
+  # The load generator IS postgres:17 -- pgbench ships in it. No Go build, no
+  # apt-get at pod start, so the exit-127 failure that killed openFGA campaign 4
+  # has nothing to reproduce from.
+  loadgen: postgres:17
+  pullPolicy: IfNotPresent
+
+# ── Origin ──────────────────────────────────────────────────────────────────
+origin:
+  # FIXED at 1 GB on every rung, same as openFGA and NetBox. Without it the
+  # ladder measures "how much RAM did Postgres get" instead of scale.
+  #
+  # The ladder grows the DATASET past this. It never shrinks this. Those are
+  # different moves and C9 forbids the second -- campaign r8 was killed for it.
+  sharedBuffers: 1GB
+  maxConnections: 500     # W2 goes to 256 clients on each of two paths
+  user: bench
+  database: bench
+  password: benchpass     # ephemeral lab on a private network
+  storage:
+    # managed-csi (Premium SSD) is enough: P0 is 150 MB and lives entirely in
+    # shared_buffers, which is the point of P0. If P2 is ever run, switch to a
+    # provisioned-IOPS class and say so in the report -- at that rung the disk
+    # becomes an experimental variable rather than a detail.
+    className: managed-csi
+    size: 128Gi
+    create: false
+  nodeRole: origin
+  # requests only, NO limits. A CPU limit becomes a CFS quota over 100 ms
+  # windows; a pod that exceeds it freezes until the window turns, and that
+  # shows up as a p99 spike indistinguishable from a cache miss. With one pod
+  # per node the isolation comes from the node.
+  resources:
+    requests: {cpu: "6", memory: 20Gi}
+    limits: {}
+
+# ── PgCache ─────────────────────────────────────────────────────────────────
+# The image embeds a PostgreSQL 18 as its cache store: a HIT is a full SQL round
+# trip to that local database, not a memory read. That is the whole reason C9
+# exists, and the reason the probe measured H = 57 us rather than something
+# microsecond-scale.
+pgcache:
+  # pgbench's four tables. pgbench_history is write-only in tpcb-like and never
+  # read, but it is listed so an invalidation on it is observable rather than
+  # silently out of scope.
+  allowedTables: "pgbench_accounts,pgbench_branches,pgbench_tellers,pgbench_history"
+
+  # STOCK for the reference campaign, deliberately.
+  #
+  # D-24 was the opposite mistake -- measuring stock, calling it "PgCache", and
+  # retracting nine cells. The remedy is not "always tune", it is "state which
+  # configuration produced the number". Here the primary result is the
+  # break-even curve, and break-even is a property of H, O and M. Pinning
+  # changes the hit ratio, which is the curve's X AXIS, not its shape.
+  #
+  # So: sweep the axis on stock first, then re-run one column pinned to show
+  # where pinning moves a workload along the curve it does not redraw.
+  pinnedTables: ""
+  admissionThreshold: ""
+  memoryLimit: ""
+  storage:
+    # Node OS disk here. Safe at P0/P1 because the working set is 150 MB / 1.5
+    # GB against 32 GiB of node memory, so the cache store never reaches disk.
+    # At P2 this MUST be turned on: the node OS disk is Premium SSD P15 (~1100
+    # IOPS) against the origin's provisioned volume, a 7x handicap that would
+    # decide an I/O-bound rung by infrastructure we chose rather than by the
+    # product.
+    enabled: false
+    className: managed-csi
+    size: 128Gi
+    subPath: pgdata
+    mountPath: /var/lib/postgresql
+  workers: 4
+  telemetry: "off"        # anonymous telemetry is uncontrolled network noise
+  sqlPort: 6432
+  metricsPort: 9090
+  nodeRole: pgcache
+  resources:
+    requests: {cpu: "6", memory: 24Gi}
+    limits: {}
+
+# ── Load generator ──────────────────────────────────────────────────────────
+loadgen:
+  nodeRole: loadgen
+  # pgbench is the bottleneck at high client counts if it is starved. It gets a
+  # node of its own for the same reason the other two do.
+  resources:
+    requests: {cpu: "6", memory: 8Gi}
+  storage:
+    className: managed-csi
+    size: 20Gi
+
+# ── Observability ───────────────────────────────────────────────────────────
+# Deployments pinned to the SYSTEM pool, never the lab nodes. The Azure Monitor
+# agents were disabled precisely because they were DaemonSets: they would run on
+# the nodes under measurement and compete for CPU inside the window.
+monitoring:
+  enabled: true
+  images:
+    prometheus: prom/prometheus:v3.1.0
+    grafana: grafana/grafana:11.5.1
+  retention: 12h
+  nodeSelector:
+    agentpool: agentpool
+  tolerations: []
+  resources:
+    prometheus: {requests: {cpu: 200m, memory: 512Mi}}
+    grafana: {requests: {cpu: 100m, memory: 256Mi}}
+
+# ── Campaign ────────────────────────────────────────────────────────────────
+#
+# Runs the sweeps as a Job on the SYSTEM pool -- never on a lab node, or the
+# runner competes with what it measures.
+#
+#   helm upgrade synth ./chart -n pgcache-synth \
+#     --set campaign.enabled=true --set campaign.id=s1
+#   kubectl -n pgcache-synth logs -f job/campaign-s1
+#
+# `id` must change every campaign: a Job is immutable and the name carries it.
+campaign:
+  enabled: false
+  id: s1
+  image: alpine/k8s:1.30.2
+
+  # pgbench scale factor. P0=10 (150 MB, fits shared_buffers entirely -- the
+  # hardest case for a cache and therefore the one that runs first).
+  scale: 10
+
+  # Which sweeps to run. See SCENARIOS.md for what each one asks.
+  #   w7  correctness gate   -- BLOCKING, aborts the campaign on any divergence
+  #   w0  H/O/M calibration  -- must run before the sweeps; everything reads it
+  #   w1  hot-set sweep      (break-even curve)
+  #   w2  saturation sweep   (offload curve)
+  #   w3  zipf skew sweep    (continuous hit ratio)
+  #   w4  protocol axis      (simple / extended / prepared)
+  #   w5  result-size axis   (where materialisation stops paying)
+  phases: "w7 w0 w1 w2 w3 w4 w5"
+
+  reps: 3
+  duration: "60s"
+  # Warm-up before each measured path-B cell. The probe used one full pass at
+  # the same parameters; D-08/D-24 is what happens when this is guessed.
+  warmup: "60s"
+
+  # Sweep points. Kept here rather than in the script so a campaign's parameters
+  # are recorded in the release, not in someone's shell history.
+  hotSweep: "1000 10000 100000 1000000"
+  clientSweep: "1 8 16 32 64 128 256"
+  zipfSweep: "1.05 1.1 1.2 1.3 1.5"
+  spanSweep: "1 10 100 1000 10000"
+  protocolSweep: "simple extended prepared"
+  # Concurrency used by every sweep that is not w2.
+  clients: 8
+  # Hot set used by every sweep that is not w1.
+  hot: 1000

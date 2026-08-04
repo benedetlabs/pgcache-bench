@@ -1,0 +1,193 @@
+{{- if .Values.monitoring.enabled }}
+{{- $ns := .Release.Namespace -}}
+{{/*
+Prometheus + Grafana para acompanhar a campanha ao vivo.
+
+DECISAO QUE IMPORTA: sao Deployments presos ao node pool de SISTEMA, nunca aos
+nos do lab. Os agentes do Azure Monitor foram desligados justamente porque eram
+DaemonSets — rodariam nos nos sob medicao, consumindo CPU e fazendo I/O dentro da
+janela. Um coletor que raspa pela rede, de fora, nao compete com o que mede.
+
+Nao levam a label lab.benedet/role de proposito: nao devem participar da
+anti-affinity do lab. Como ficam noutro pool, o nodeSelector ja' os mantem longe.
+
+Isto e' observabilidade, nao fonte de resultado. Os numeros publicaveis continuam
+vindo dos artefatos do fgabench (summary.json, latencies.csv, os dumps de
+/metrics antes e depois da janela). O Prometheus aqui tem retencao curta e
+armazenamento efemero.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab-prometheus-config
+  labels: {{- include "lab.labels" . | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s          # janelas de medicao sao de 60 s
+      evaluation_interval: 15s
+    scrape_configs:
+      - job_name: pgcache
+        static_configs:
+          - targets: ['pgcache.{{ $ns }}.svc.cluster.local:{{ .Values.pgcache.metricsPort }}']
+            labels: {component: pgcache}
+      ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab-grafana-config
+  labels: {{- include "lab.labels" . | nindent 4 }}
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://lab-prometheus.{{ $ns }}.svc.cluster.local:9090
+        isDefault: true
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: lab
+        folder: ''
+        type: file
+        options: {path: /var/lib/grafana/dashboards}
+  lab.json: |
+    {
+      "title": "PgCache x OpenFGA - live",
+      "uid": "pgcache-lab",
+      "time": {"from": "now-30m", "to": "now"},
+      "refresh": "10s",
+      "panels": [
+        {
+          "type": "timeseries", "title": "PgCache hit ratio",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "fieldConfig": {"defaults": {"unit": "percentunit", "max": 1, "min": 0}},
+          "targets": [{
+            "expr": "rate(pgcache_queries_cache_hit[1m]) / clamp_min(rate(pgcache_queries_cache_hit[1m]) + rate(pgcache_queries_cache_miss[1m]), 1)",
+            "legendFormat": "hit ratio"
+          }]
+        },
+        {
+          "type": "timeseries", "title": "Query amplification (datastore queries per request)",
+          "description": "Metrica-chave: 100-480 consultas por requisicao. Se difere entre dois caminhos, eles nao fizeram o mesmo trabalho.",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [{
+            "expr": "sum by (path) (rate(datastore_query_count_sum[1m])) / clamp_min(sum by (path) (rate(datastore_query_count_count[1m])), 1)",
+            "legendFormat": "{{`{{path}}`}}"
+          }]
+        },
+        {
+          "type": "timeseries", "title": "Request duration p99 by path",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "fieldConfig": {"defaults": {"unit": "ms"}},
+          "targets": [{
+            "expr": "histogram_quantile(0.99, sum by (le, path) (rate(request_duration_ms_bucket[1m])))",
+            "legendFormat": "{{`{{path}}`}} p99"
+          }]
+        },
+        {
+          "type": "timeseries", "title": "PgCache shape registration (the cost of a miss)",
+          "description": "Registrar shape nova custa ~20-33 ms. Com 124 consultas por Check, e' o que produz a cauda.",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {"expr": "pgcache_cache_queries_registered", "legendFormat": "shapes registradas"},
+            {"expr": "pgcache_cache_queries_loading", "legendFormat": "em carregamento"},
+            {"expr": "rate(pgcache_cache_registration_throttled_total[1m])", "legendFormat": "throttled/s"}
+          ]
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-prometheus
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  selector: {app: lab-prometheus}
+  ports: [{port: 9090, targetPort: 9090, name: http}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-grafana
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  selector: {app: lab-grafana}
+  ports: [{port: 3000, targetPort: 3000, name: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-prometheus
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: lab-prometheus}}
+  template:
+    metadata:
+      labels:
+        app: lab-prometheus
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      nodeSelector: {{- toYaml .Values.monitoring.nodeSelector | nindent 8 }}
+      {{- with .Values.monitoring.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: prometheus
+          image: {{ .Values.monitoring.images.prometheus }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time={{ .Values.monitoring.retention }}
+          ports: [{containerPort: 9090}]
+          resources: {{- toYaml .Values.monitoring.resources.prometheus | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/prometheus}
+            - {name: data, mountPath: /prometheus}
+      volumes:
+        - name: config
+          configMap: {name: lab-prometheus-config}
+        - name: data
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-grafana
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: lab-grafana}}
+  template:
+    metadata:
+      labels:
+        app: lab-grafana
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      nodeSelector: {{- toYaml .Values.monitoring.nodeSelector | nindent 8 }}
+      {{- with .Values.monitoring.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: grafana
+          image: {{ .Values.monitoring.images.grafana }}
+          env:
+            # Lab efemero em rede privada, alcancado so' por port-forward.
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "true"}
+            - {name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: "Admin"}
+            - {name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true"}
+            - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
+          ports: [{containerPort: 3000}]
+          resources: {{- toYaml .Values.monitoring.resources.grafana | nindent 12 }}
+          volumeMounts:
+            - {name: cfg, mountPath: /etc/grafana/provisioning/datasources/datasource.yaml, subPath: datasource.yaml}
+            - {name: cfg, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml}
+            - {name: cfg, mountPath: /var/lib/grafana/dashboards/lab.json, subPath: lab.json}
+      volumes:
+        - name: cfg
+          configMap: {name: lab-grafana-config}
+{{- end }}

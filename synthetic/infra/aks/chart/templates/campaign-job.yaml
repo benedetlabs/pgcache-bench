@@ -1,0 +1,353 @@
+{{- if .Values.campaign.enabled }}
+{{- $ns := .Release.Namespace -}}
+{{- $c := .Values.campaign -}}
+{{/*
+The campaign runner.
+
+Runs IN the cluster, on the SYSTEM pool, because driving this from a laptop
+failed three times on openFGA for reasons that had nothing to do with the
+experiment: session ended, machine slept, Spot node vanished. It is on the system
+pool and not a lab node so the runner never competes with what it measures.
+
+Everything the runner learned the hard way is in here and marked:
+  abort()        gates that exit non-zero must not be swallowed by a pipe. The
+                 openFGA seed verifier and the W7 gate both exited 1 for two
+                 whole campaigns while their output went to `tail` and the
+                 campaign carried on regardless.
+  cold_pgcache() restart and WAIT. Readiness proven by observable behaviour, not
+                 by a metric -- D-20 was half a day spent gating on a gauge that
+                 leaks.
+  check_health() the pool is Spot. An eviction inside a window invalidates that
+                 cell, and it has to be detected rather than averaged in.
+  $RESULTS       carries the campaign id. D-18: without it, report aggregation
+                 silently mixed runs from different campaigns.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: campaign-{{ $c.id }}-script
+  labels: {{- include "lab.labels" . | nindent 4 }}
+data:
+  run.sh: |
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    NS={{ $ns | quote }}
+    CAMPAIGN={{ $c.id | quote }}
+    SCALE={{ $c.scale | quote }}
+    REPS={{ $c.reps | quote }}
+    DUR={{ $c.duration | quote }}
+    WARMUP={{ $c.warmup | quote }}
+    PHASES={{ $c.phases | quote }}
+    HOT_SWEEP={{ $c.hotSweep | quote }}
+    CLIENT_SWEEP={{ $c.clientSweep | quote }}
+    ZIPF_SWEEP={{ $c.zipfSweep | quote }}
+    SPAN_SWEEP={{ $c.spanSweep | quote }}
+    PROTO_SWEEP={{ $c.protocolSweep | quote }}
+    CLIENTS={{ $c.clients | quote }}
+    HOT={{ $c.hot | quote }}
+
+    RESULTS=/lab/results/$CAMPAIGN
+    TSV=$RESULTS/cells.tsv
+
+    # ── gates ────────────────────────────────────────────────────────────────
+    # A gate that cannot stop the campaign is not a gate. On openFGA both the
+    # seed verifier and the correctness check exited 1 into a pipe for two
+    # campaigns, and 52 runs were recorded on top of them.
+    abort() { echo "ABORT: $*" >&2; kubectl -n "$NS" exec deploy/loadgen -- bash -c "mkdir -p $RESULTS && echo 'ABORT: $*' >> $RESULTS/ABORTED" 2>/dev/null; exit 1; }
+
+    ex() { kubectl -n "$NS" exec deploy/loadgen -- bash -c "$1"; }
+
+    # Spot eviction inside a measurement window invalidates the cell. Matches the
+    # REASON column and only the last 5 minutes -- an eviction from yesterday is
+    # not evidence about this cell.
+    check_health() {
+      local ev
+      ev=$(kubectl -n "$NS" get events --sort-by=.lastTimestamp --no-headers 2>/dev/null \
+            | awk 'tolower($3) ~ /preempt|evict|oomkill|nodenotready/ \
+                   && ($1 ~ /^[0-9]+s$/ || $1 ~ /^[1-4]m/)' | tail -3)
+      [ -n "$ev" ] && echo "  !! HEALTH: $ev" >&2
+      return 0
+    }
+
+    # PgCache cold, then PROVEN able to serve before anything is measured.
+    #
+    # Readiness is checked by behaviour -- can it answer a query at all -- and not
+    # by a metric. D-20 was half a day lost to gating on
+    # pgcache_cache_reg_gate_loading, which sat at 25 with the stack idle while
+    # PgCache answered queries perfectly well.
+    cold_pgcache() {
+      kubectl -n "$NS" rollout restart deploy/pgcache >/dev/null 2>&1
+      kubectl -n "$NS" rollout status  deploy/pgcache --timeout=300s >/dev/null 2>&1 \
+        || abort "pgcache did not become ready after restart"
+      local i
+      for i in $(seq 1 60); do
+        if ex 'psql -h $PGCACHE_HOST -p $PGCACHE_PORT -U $PGUSER -d $PGDATABASE -tAc "select 1"' >/dev/null 2>&1; then
+          return 0
+        fi
+        sleep 5
+      done
+      abort "pgcache never served a query after restart"
+    }
+
+    # Scraped from the RUNNER, not through the loadgen pod: postgres:17 ships no
+    # curl, and installing one there would reintroduce the apt-get-at-startup
+    # fragility that killed openFGA campaign 4. The runner sits on the system
+    # pool and reaches the metrics port over the node IP, which is what the
+    # headless Service resolves to under hostNetwork.
+    PGCACHE_METRICS="http://pgcache.$NS.svc.cluster.local:{{ .Values.pgcache.metricsPort }}/metrics"
+    hitratio() {
+      curl -s --max-time 10 "$PGCACHE_METRICS" 2>/dev/null | awk '
+        /^pgcache_queries_cache_hit /  {h=$2}
+        /^pgcache_queries_cache_miss / {m=$2}
+        END { printf "%d %d %.4f", h+0, m+0, (h+m)?h/(h+m):0 }'
+    }
+
+    # One measured cell. Emits a TSV row and echoes a human line.
+    #
+    # host/port is THE ONLY difference between the paths. Same binary, same
+    # script, same data, same node. Anything else that differs makes the
+    # comparison meaningless -- that is the openFGA simple_protocol lesson.
+    cell() {
+      local phase=$1 path=$2 param=$3 value=$4 clients=$5 proto=$6; shift 6
+      local hostvar portvar
+      if [ "$path" = A ]; then hostvar='$ORIGIN_HOST';  portvar='$ORIGIN_PORT'
+                         else hostvar='$PGCACHE_HOST'; portvar='$PGCACHE_PORT'; fi
+
+      # Path B gets a cold cache and one full warm-up pass at the SAME
+      # parameters. D-24: the adaptive warm-up existed for 52 runs and was never
+      # passed to the generator, so every run recorded 45 s while the knee was at
+      # 2m30.
+      if [ "$path" = B ]; then
+        cold_pgcache
+        ex "pgbench -h $hostvar -p $portvar -U \$PGUSER -n -M $proto -c $clients -j 4 -T ${WARMUP%s} $* \$PGDATABASE" >/dev/null 2>&1
+      fi
+
+      local out lat tps hm
+      out=$(ex "pgbench -h $hostvar -p $portvar -U \$PGUSER -n -M $proto -c $clients -j 4 -T ${DUR%s} $* \$PGDATABASE" 2>&1) \
+        || abort "$phase/$path/$param=$value: pgbench failed: $(echo "$out" | tail -3)"
+      lat=$(echo "$out" | awk '/latency average/{print $4}')
+      tps=$(echo "$out" | awk '/^tps/{printf "%.0f", $3}')
+      [ -z "$lat" ] && abort "$phase/$path/$param=$value: pgbench produced no latency line"
+
+      # hit/miss/ratio as three plain fields. An earlier version passed a
+      # tab-separated blob through a shell interpolation into the TSV writer,
+      # which is a column-alignment bug waiting to happen the first time a field
+      # comes back empty.
+      local hit=- miss=- ratio=-
+      if [ "$path" = B ]; then read -r hit miss ratio <<<"$(hitratio)"; fi
+      ex "printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+          '$CAMPAIGN' '$phase' '$path' '$param' '$value' '$clients' '$lat' '$tps' '$hit' '$miss' '$ratio' >> $TSV"
+      printf '  %-3s path %s  %-8s=%-9s c=%-4s %-9s lat=%8s ms  tps=%9s  ratio=%s\n' \
+        "$phase" "$path" "$param" "$value" "$clients" "$proto" "$lat" "$tps" "$ratio"
+      check_health
+    }
+
+    # ── setup ────────────────────────────────────────────────────────────────
+    echo "=== campaign $CAMPAIGN · scale=$SCALE · phases: $PHASES ==="
+    kubectl -n "$NS" rollout status deploy/loadgen --timeout=900s >/dev/null 2>&1 \
+      || abort "loadgen never became ready"
+
+    ex "mkdir -p $RESULTS && [ -f $TSV ] || printf 'campaign\tphase\tpath\tparam\tvalue\tclients\tlat_ms\ttps\thit\tmiss\tratio\n' > $TSV" \
+      || abort "could not create results directory"
+
+    echo "--- seeding pgbench scale=$SCALE against the ORIGIN ---"
+    # pgbench -i drops and recreates its tables, so there is no index bloat to
+    # carry between rungs -- the DELETE-versus-TRUNCATE trap that made an openFGA
+    # rung report a 556 MB dataset that was 23 MB of data and 525 MB of bloat
+    # cannot happen here.
+    ex 'pgbench -h $ORIGIN_HOST -p $ORIGIN_PORT -U $PGUSER -i -s '"$SCALE"' -q $PGDATABASE' 2>&1 | tail -2 \
+      || abort "seed failed"
+    ex 'psql -h $ORIGIN_HOST -p $ORIGIN_PORT -U $PGUSER -d $PGDATABASE -tAc "select pg_size_pretty(pg_total_relation_size('"'"'pgbench_accounts'"'"'))"' \
+      | sed 's/^/  pgbench_accounts: /'
+
+    has() { case " $PHASES " in *" $1 "*) return 0;; *) return 1;; esac; }
+
+    # ── w7 · correctness gate · BLOCKING ─────────────────────────────────────
+    #
+    # Runs FIRST and blocks everything. No performance number in this platform
+    # has ever been published without one; openFGA reported 4,000 pairs at
+    # 100.000000% agreement on every campaign.
+    #
+    # Three passes, because a cache that is only correct when cold is not
+    # correct: cold, warm, and immediately after writes so CDC invalidation is
+    # exercised rather than assumed.
+    if has w7; then
+      echo "--- w7 · differential correctness gate ---"
+      cold_pgcache
+      # 2,000 keys per pass, as ONE psql invocation per path.
+      #
+      # The obvious implementation -- loop N times, exec psql twice per key -- is
+      # 2N kubectl execs at roughly a second each, which is twenty minutes to
+      # compare two hundred rows. Building the statement list once and diffing
+      # two outputs is the same comparison, ten times the sample, in seconds.
+      #
+      # Each key is a SEPARATE statement rather than one IN (...) list, because a
+      # single wide query would be one cache entry and would prove nothing about
+      # the per-key entries the workload actually creates.
+      gate() {
+        local label=$1 n=2000
+        ex "awk 'BEGIN{srand($RANDOM); for(i=0;i<$n;i++){k=int(rand()*(100000*$SCALE))+1;
+              printf \"select aid,abalance from pgbench_accounts where aid = %d;\n\", k}}' > /tmp/gate.sql" \
+          || abort "w7 $label: could not build the statement list"
+        ex 'psql -h $ORIGIN_HOST  -p $ORIGIN_PORT  -U $PGUSER -d $PGDATABASE -tA -f /tmp/gate.sql > /tmp/gate.a' \
+          || abort "w7 $label: origin side failed"
+        ex 'psql -h $PGCACHE_HOST -p $PGCACHE_PORT -U $PGUSER -d $PGDATABASE -tA -f /tmp/gate.sql > /tmp/gate.b' \
+          || abort "w7 $label: pgcache side failed"
+        local diff
+        diff=$(ex 'diff /tmp/gate.a /tmp/gate.b | grep -c "^[<>]" || true' 2>/dev/null | tr -d '[:space:]')
+        [ -z "$diff" ] && diff=0
+        local rows; rows=$(ex 'wc -l < /tmp/gate.a' | tr -d '[:space:]')
+        echo "  $label: $n statements, $rows rows, $diff divergent lines"
+        [ "$rows" = "$n" ] || abort "w7 $label: expected $n rows, got $rows"
+        [ "$diff" -eq 0 ] || { ex 'diff /tmp/gate.a /tmp/gate.b | head -10' >&2; abort "w7 $label: $diff divergences"; }
+      }
+      gate cold
+      gate warm
+      echo "  writing, then re-checking so CDC invalidation is exercised"
+      ex 'psql -h $ORIGIN_HOST -p $ORIGIN_PORT -U $PGUSER -d $PGDATABASE -c "update pgbench_accounts set abalance = abalance + 1 where aid <= 5000"' >/dev/null
+      sleep 15
+      gate post-write
+    fi
+
+    # ── w0 · calibration · H, O and M ────────────────────────────────────────
+    #
+    # Everything downstream reads these three numbers, because break-even is
+    # (M-O)/(M-H) and the whole claim rests on it. Measured here, never carried
+    # over from the laptop: there the origin was 77 us against ~40 us on these
+    # nodes, and break-even RISES as the origin gets faster.
+    if has w0; then
+      echo "--- w0 · calibration (O, H, M) ---"
+      cell w0 A origin-cost na 1 simple -f /scripts/s1-hot.sql -D hot=1000
+      cell w0 B hit-cost    na 1 simple -f /scripts/s1-hot.sql -D hot=1000
+      cell w0 B miss-cost   na 1 simple -f /scripts/s1-hot.sql -D hot=$((100000 * SCALE))
+    fi
+
+    # ── w1 · hot-set sweep · the break-even curve ────────────────────────────
+    if has w1; then
+      echo "--- w1 · hot-set sweep ---"
+      for r in $(seq 1 "$REPS"); do
+        for h in $HOT_SWEEP; do
+          cell w1 A hot "$h" "$CLIENTS" simple -f /scripts/s1-hot.sql -D hot=$h
+          cell w1 B hot "$h" "$CLIENTS" simple -f /scripts/s1-hot.sql -D hot=$h
+        done
+      done
+    fi
+
+    # ── w2 · saturation sweep · the offload curve ────────────────────────────
+    #
+    # Must push PAST the origin's collapse point. openFGA never did, which is why
+    # every one of its campaigns measured PgCache's overhead and none measured
+    # its offload.
+    if has w2; then
+      echo "--- w2 · saturation sweep ---"
+      for r in $(seq 1 "$REPS"); do
+        for c in $CLIENT_SWEEP; do
+          cell w2 A clients "$c" "$c" simple -f /scripts/s1-hot.sql -D hot=$HOT
+          cell w2 B clients "$c" "$c" simple -f /scripts/s1-hot.sql -D hot=$HOT
+        done
+      done
+    fi
+
+    # ── w3 · zipf skew · continuous hit ratio ────────────────────────────────
+    if has w3; then
+      echo "--- w3 · zipf skew sweep ---"
+      for r in $(seq 1 "$REPS"); do
+        for s in $ZIPF_SWEEP; do
+          cell w3 A zipf "$s" "$CLIENTS" simple -f /scripts/s2-zipf.sql -D s=$s -D scale=$SCALE
+          cell w3 B zipf "$s" "$CLIENTS" simple -f /scripts/s2-zipf.sql -D s=$s -D scale=$SCALE
+        done
+      done
+    fi
+
+    # ── w4 · protocol axis ───────────────────────────────────────────────────
+    #
+    # No other subject could run this. On openFGA simple protocol had to be
+    # FORCED on path B only, so path B was "path A without prepared statements
+    # plus a cache" -- the confound that made nine cells retractable. Here all
+    # three modes are pgbench's own flags and both paths run each one.
+    if has w4; then
+      echo "--- w4 · protocol axis ---"
+      for r in $(seq 1 "$REPS"); do
+        for p in $PROTO_SWEEP; do
+          cell w4 A proto "$p" 32 "$p" -f /scripts/s1-hot.sql -D hot=$HOT
+          cell w4 B proto "$p" 32 "$p" -f /scripts/s1-hot.sql -D hot=$HOT
+        done
+      done
+    fi
+
+    # ── w5 · result-size axis · where it breaks ──────────────────────────────
+    #
+    # Published deliberately. The laptop found PgCache losing at a 95.6% hit
+    # ratio on a 100-row aggregate and by 65x at 10,000 rows. A campaign that
+    # reported only w1-w4 would be selling; this is the sweep that makes it a
+    # measurement.
+    if has w5; then
+      echo "--- w5 · result-size axis ---"
+      for r in $(seq 1 "$REPS"); do
+        for sp in $SPAN_SWEEP; do
+          cell w5 A span "$sp" "$CLIENTS" simple -f /scripts/s3-range.sql -D hot=$HOT -D span=$sp
+          cell w5 B span "$sp" "$CLIENTS" simple -f /scripts/s3-range.sql -D hot=$HOT -D span=$sp
+        done
+      done
+    fi
+
+    echo "=== campaign $CAMPAIGN complete ==="
+    ex "wc -l < $TSV" | sed 's/^/rows: /'
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: campaign-{{ $c.id }}
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 0          # a half-run campaign is not a retry candidate
+  template:
+    metadata:
+      labels: {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: campaign-{{ $c.id }}
+      # SYSTEM pool. A runner on a lab node competes with what it measures.
+      nodeSelector:
+        agentpool: agentpool
+      containers:
+        - name: runner
+          image: {{ $c.image }}
+          command: [/bin/bash, /script/run.sh]
+          volumeMounts:
+            - {name: script, mountPath: /script}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+      volumes:
+        - name: script
+          configMap: {name: campaign-{{ $c.id }}-script, defaultMode: 0755}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: campaign-{{ $c.id }}
+  labels: {{- include "lab.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: campaign-{{ $c.id }}
+  labels: {{- include "lab.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/exec, pods/log, events]
+    verbs: [get, list, create, watch]
+  - apiGroups: ["apps"]
+    resources: [deployments, statefulsets]
+    verbs: [get, list, patch, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: campaign-{{ $c.id }}
+  labels: {{- include "lab.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: campaign-{{ $c.id }}}
+subjects:
+  - {kind: ServiceAccount, name: campaign-{{ $c.id }}, namespace: {{ $ns }}}
+{{- end }}

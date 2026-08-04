@@ -1,0 +1,12 @@
+apiVersion: v2
+name: pgcache-synthetic-lab
+description: >-
+  PgCache synthetic benchmark lab. Two paths (origin, pgcache) driven by
+  pgbench, one pod per node. There is no path C: pgbench has no application
+  tier and no cache of its own.
+type: application
+version: 0.1.0
+appVersion: "1.0"
+keywords: [benchmark, pgbench, pgcache, postgres]
+maintainers:
+  - name: BenedetLabs

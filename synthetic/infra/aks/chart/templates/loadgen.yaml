@@ -1,0 +1,137 @@
+{{- $ns := .Release.Namespace -}}
+{{/*
+The load generator, and the pgbench scripts it runs.
+
+Deployment rather than a bare Pod, and results on a PVC rather than emptyDir.
+Both are the D-17 fix: the openFGA generator was a Pod with no controller
+holding artifacts in an emptyDir, and when the Spot node was deallocated nothing
+recreated it and 27 runs died with it. Twice.
+
+The image is postgres:17 because pgbench ships inside it. openFGA's generator was
+a golang image that apt-get'd postgresql-client at pod start, and campaign 4 died
+with exit 127 when that had not finished. Here there is nothing to install.
+
+The scripts live in a ConfigMap rather than in the image so that changing a
+workload is a helm upgrade, not an image build -- and so the exact script text
+that produced a number is recorded in the release.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bench-scripts
+  labels: {{- include "lab.labels" . | nindent 4 }}
+data:
+  s1-hot.sql: |
+    -- Bounded hot set. The KEYSPACE is the variable, not the query.
+    --
+    -- pgbench's own select-only builtin draws aid uniformly from the whole
+    -- table. Under -M simple that literal is interpolated into the SQL text, so
+    -- every draw is a distinct cache key: the local probe measured 169 hits in
+    -- 121,545 queries, a 0.14% hit ratio. That is not a cache result, it is a
+    -- keyspace result -- the workload never repeats itself.
+    --
+    -- -D hot=NNNN bounds the draw and therefore sets the hit ratio directly.
+    \set aid random(1, :hot)
+    SELECT abalance FROM pgbench_accounts WHERE aid = :aid;
+  s2-zipf.sql: |
+    -- Zipfian access over the whole table.
+    --
+    -- s1's hard cutoff gives a cache all-or-nothing residency. Real access has
+    -- a tail, and the tail is where eviction is actually exercised. Larger :s
+    -- concentrates the distribution and raises the hit ratio continuously,
+    -- which is how the break-even was located at all.
+    \set aid random_zipfian(1, 100000 * :scale, :s)
+    SELECT abalance FROM pgbench_accounts WHERE aid = :aid;
+  s3-range.sql: |
+    -- Range scan with an aggregate: C9 from the expensive side.
+    --
+    -- The point-select is the cheapest query PostgreSQL can serve, so it gives
+    -- the cache almost no room. This one costs the origin tens of times more.
+    -- The local probe found it LOSING at a 95.6% hit ratio and by 65x at 10,000
+    -- rows, which is what produced criterion C9c: cost from result size is not
+    -- bankable, because the cache pays it again on every hit.
+    --
+    -- :hot bounds the offset so the hit ratio stays controllable independently
+    -- of :span -- otherwise raising cost would also destroy residency and the
+    -- two effects could not be told apart.
+    \set lo random(1, :hot)
+    SELECT sum(abalance) FROM pgbench_accounts WHERE aid BETWEEN :lo AND :lo + :span;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loadgen-results
+  labels: {{- include "lab.labels" . | nindent 4 }}
+  annotations:
+    # Survives `helm uninstall`: the results are the product of the lab, and
+    # deleting them with the release has already cost one campaign.
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.loadgen.storage.className }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.loadgen.storage.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  labels: {{- include "lab.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # RWO volume: the old pod must release it before the new one binds. This is
+  # also D-19 -- a RollingUpdate here surges a second pod onto a node the
+  # autoscaler has not got, and the rollout deadlocks forever.
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: loadgen}}
+  template:
+    metadata:
+      labels:
+        app: loadgen
+        lab.benedet/role: {{ .Values.loadgen.nodeRole }}
+        {{- include "lab.labels" . | nindent 8 }}
+    spec:
+      {{- include "lab.podNetwork" . | nindent 6 }}
+      {{- include "lab.placement" (dict "root" . "role" .Values.loadgen.nodeRole) | nindent 6 }}
+      containers:
+        - name: bench
+          image: {{ .Values.images.loadgen }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: [/bin/bash, -c, "pgbench --version && psql --version && exec sleep infinity"]
+          # The campaign Job execs into this pod. Without a probe it can exec
+          # into one that is not up yet, and the first cell fails on a missing
+          # command -- which is exactly how openFGA campaign 4 died.
+          readinessProbe:
+            exec: {command: [/bin/bash, -c, "command -v pgbench && command -v psql"]}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 30
+          workingDir: /lab
+          env:
+            - {name: PGHOST, value: "origin.{{ $ns }}.svc.cluster.local"}
+            - {name: PGPORT, value: "5432"}
+            - {name: PGUSER, value: {{ .Values.origin.user | quote }}}
+            - {name: PGDATABASE, value: {{ .Values.origin.database | quote }}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: lab-db, key: POSTGRES_PASSWORD}}
+            # The two paths. They differ in host and port and in nothing else --
+            # same binary, same script, same data. That is the whole protocol.
+            - {name: ORIGIN_HOST, value: "origin.{{ $ns }}.svc.cluster.local"}
+            - {name: ORIGIN_PORT, value: "5432"}
+            - {name: PGCACHE_HOST, value: "pgcache.{{ $ns }}.svc.cluster.local"}
+            - {name: PGCACHE_PORT, value: {{ .Values.pgcache.sqlPort | quote }}}
+            - name: PGCACHE_METRICS
+              value: "http://pgcache.{{ $ns }}.svc.cluster.local:{{ .Values.pgcache.metricsPort }}/metrics"
+            - {name: NAMESPACE, value: {{ $ns | quote }}}
+          resources: {{- toYaml .Values.loadgen.resources | nindent 12 }}
+          volumeMounts:
+            - {name: lab, mountPath: /lab}
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+      volumes:
+        - name: lab
+          persistentVolumeClaim: {claimName: loadgen-results}
+        - name: scripts
+          configMap: {name: bench-scripts}

@@ -1,0 +1,31 @@
+{{- if .Values.origin.storage.create }}
+{{/*
+A StorageClass vive no chart, nao no cluster.sh: no modo sharedPool nao criamos
+node pools, entao nao ha' onde mais criar isto — e sem ela o PVC da origem nunca
+liga e todo o lab cai em cascata (origin Pending -> pgcache sem DNS da origem ->
+openfga em "waiting for database").
+
+IOPS e throughput sao EXPLICITOS de proposito. Em E3 a tabela tem ~5,3 GB contra
+1 GB de shared_buffers, entao a origem vira I/O bound por desenho: o disco deixa
+de ser detalhe de infra e vira variavel do experimento. Um numero fixo aqui e'
+citavel no relatorio; "o que a StorageClass padrao deu" nao e'.
+
+Premium SSD v2 nao aceita cache de host e exige zona — as duas coisas sao
+restricao da plataforma, nao escolha. WaitForFirstConsumer garante que o disco
+nasce na mesma zona do no' que recebeu o pod.
+*/}}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.origin.storage.className }}
+  labels: {{- include "lab.labels" . | nindent 4 }}
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  skuName: PremiumV2_LRS
+  DiskIOPSReadWrite: {{ .Values.origin.storage.iops | quote }}
+  DiskMBpsReadWrite: {{ .Values.origin.storage.mbps | quote }}
+  cachingMode: None
+{{- end }}
