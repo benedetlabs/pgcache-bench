@@ -74,9 +74,10 @@ diferencial: emite-se a mesma consulta para a origem e para o PgCache e compara-
 o resultado byte a byte. Qualquer divergência aborta a campanha.
 
 Esse portão nunca falhou. Em todas as campanhas, com todos os sujeitos, incluindo
-imediatamente após rajadas de escrita para forçar a invalidação por CDC, o
-PgCache devolveu exatamente o mesmo resultado que a origem. Milhares de
-comparações, zero divergências.
+imediatamente após rajadas de escrita para forçar a invalidação por CDC — e,
+depois, com leituras chegando **enquanto** as escritas estavam em voo — o PgCache
+devolveu exatamente o mesmo resultado que a origem. Milhares de comparações, zero
+divergências.
 
 **Se você tirar uma única conclusão deste relatório, que seja essa: a correção do
 PgCache nunca esteve em questão.** Todo o resto é sobre desempenho.
