@@ -2,6 +2,10 @@
 
 **Campaign mt1 · AKS · 2026-08-04**
 
+> A step-by-step walkthrough of this campaign — every SQL file, workload
+> script and driver, with the reasoning behind each decision — is in
+> [`article/`](article/). This document is the short form.
+
 Multi-tenant came first precisely because it looked like the worst case. In a
 SaaS every query carries `WHERE tenant_id = :t`, and the intuition was that this
 multiplies the space of distinct queries by the number of active tenants,
